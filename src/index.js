@@ -29,8 +29,7 @@ app.listen(port, () => {
   const fmt = (c, cur) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: cur }).format(c / 100);
 
-  console.log(`\nsimpltech GHL + Alternative Payments server → http://localhost:${port}`);
+  console.log(`\nsimpltech Payment server → http://localhost:${port}`);
   console.log(`  Preset amount : ${fmt(config.payment.presetAmount, config.payment.currency)}`);
-  console.log(`  AP base URL   : ${config.ap.apiBaseUrl}`);
-  console.log(`  GHL base URL  : ${config.ghl.apiBaseUrl}\n`);
+  console.log(`  QBO env       : ${config.qbo.environment}\n`);
 });

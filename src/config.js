@@ -81,22 +81,12 @@ function qboEnabled() {
 }
 
 function validateConfig() {
-  const missing = [];
-
-  // GHL auth
-  if (!config.ghl.apiKey) {
-    if (!config.ghl.clientId)     missing.push('GHL_CLIENT_ID');
-    if (!config.ghl.clientSecret) missing.push('GHL_CLIENT_SECRET');
-  }
-
-  // Alternative Payments auth
-  if (!config.ap.apiKey) missing.push('AP_API_KEY');
-
-  if (missing.length) {
-    throw new Error(
-      `Missing required environment variables: ${missing.join(', ')}.\n` +
-      'Copy .env.example to .env and fill in your credentials.',
-    );
+  // QBO vars are set up post-deploy via /api/qbo/connect — warn but don't exit.
+  const q = config.qbo;
+  if (!q.clientId || !q.clientSecret) {
+    console.warn('[config] QBO_CLIENT_ID / QBO_CLIENT_SECRET not set — QBO integration disabled.');
+  } else if (!q.realmId || !q.refreshToken) {
+    console.warn('[config] QBO_REALM_ID / QBO_REFRESH_TOKEN not set — visit /api/qbo/connect to authorise.');
   }
 }
 
