@@ -1,5 +1,6 @@
 'use strict';
 
+const path    = require('path');
 const express = require('express');
 const { config, validateConfig } = require('./config');
 
@@ -7,7 +8,8 @@ validateConfig();
 
 const app = express();
 app.use(express.json());
-app.use(express.urlencoded({ extended: true })); // handles GHL form POST submissions
+app.use(express.urlencoded({ extended: true })); // handles HTML form POST submissions
+app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/keys',     require('./routes/keys'));

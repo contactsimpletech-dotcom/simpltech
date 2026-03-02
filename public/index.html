@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SimplTech — IT Support Payment</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f7fa;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+      color: #1a1a2e;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+      width: 100%;
+      max-width: 480px;
+      padding: 40px 36px;
+    }
+
+    .logo {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #0057ff;
+      margin-bottom: 4px;
+      letter-spacing: -0.5px;
+    }
+
+    .subtitle {
+      font-size: 0.9rem;
+      color: #6b7280;
+      margin-bottom: 32px;
+    }
+
+    h2 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 24px;
+      color: #111827;
+    }
+
+    .amount-badge {
+      display: inline-block;
+      background: #eff6ff;
+      color: #0057ff;
+      font-weight: 700;
+      font-size: 1.1rem;
+      border-radius: 8px;
+      padding: 10px 18px;
+      margin-bottom: 28px;
+    }
+
+    .field {
+      margin-bottom: 18px;
+    }
+
+    label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: #374151;
+      margin-bottom: 6px;
+    }
+
+    label .req {
+      color: #ef4444;
+      margin-left: 2px;
+    }
+
+    input {
+      width: 100%;
+      padding: 11px 14px;
+      border: 1.5px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      color: #111827;
+      background: #fafafa;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      outline: none;
+    }
+
+    input:focus {
+      border-color: #0057ff;
+      box-shadow: 0 0 0 3px rgba(0,87,255,0.10);
+      background: #fff;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .submit-btn {
+      width: 100%;
+      padding: 13px;
+      background: #0057ff;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: background 0.15s, transform 0.1s;
+      letter-spacing: 0.01em;
+    }
+
+    .submit-btn:hover  { background: #0046cc; }
+    .submit-btn:active { transform: scale(0.98); }
+
+    .submit-btn:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .note {
+      font-size: 0.78rem;
+      color: #9ca3af;
+      text-align: center;
+      margin-top: 16px;
+    }
+
+    .error-msg {
+      display: none;
+      background: #fef2f2;
+      color: #b91c1c;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 0.85rem;
+      margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">SimplTech</div>
+    <div class="subtitle">IT Support Services</div>
+
+    <h2>Complete Your Payment</h2>
+    <div class="amount-badge">$75.00 — One-time service fee</div>
+
+    <div class="error-msg" id="errorMsg"></div>
+
+    <form id="payForm" action="/api/clients" method="POST" novalidate>
+      <div class="row">
+        <div class="field">
+          <label for="first_name">First name <span class="req">*</span></label>
+          <input type="text" id="first_name" name="first_name"
+                 placeholder="Jane" autocomplete="given-name" required />
+        </div>
+        <div class="field">
+          <label for="last_name">Last name</label>
+          <input type="text" id="last_name" name="last_name"
+                 placeholder="Smith" autocomplete="family-name" />
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="email">Email address <span class="req">*</span></label>
+        <input type="email" id="email" name="email"
+               placeholder="jane@example.com" autocomplete="email" required />
+      </div>
+
+      <div class="field">
+        <label for="phone">Phone number</label>
+        <input type="tel" id="phone" name="phone"
+               placeholder="+1 (555) 000-0000" autocomplete="tel" />
+      </div>
+
+      <button type="submit" class="submit-btn" id="submitBtn">
+        Proceed to Payment →
+      </button>
+    </form>
+
+    <p class="note">You will be redirected to a secure checkout page to complete payment.</p>
+  </div>
+
+  <script>
+    const form     = document.getElementById('payForm');
+    const btn      = document.getElementById('submitBtn');
+    const errorMsg = document.getElementById('errorMsg');
+
+    form.addEventListener('submit', function (e) {
+      errorMsg.style.display = 'none';
+
+      const first = document.getElementById('first_name').value.trim();
+      const email = document.getElementById('email').value.trim();
+
+      if (!first || !email) {
+        e.preventDefault();
+        errorMsg.textContent = 'First name and email are required.';
+        errorMsg.style.display = 'block';
+        return;
+      }
+
+      btn.disabled    = true;
+      btn.textContent = 'Redirecting…';
+    });
+  </script>
+</body>
+</html>
