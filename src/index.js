@@ -15,6 +15,7 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 app.use('/api/keys',     require('./routes/keys'));
 app.use('/api/clients',  require('./routes/clients'));
 app.use('/api/webhooks', require('./routes/webhooks'));
+app.use('/api/qbo',      require('./routes/qbo'));
 
 app.get('/health', (_req, res) =>
   res.json({ ok: true, service: 'simpltech-ghl-payments' }),

@@ -42,6 +42,17 @@ const config = {
       'https://public-api.alternativepayments.io',
   },
 
+  // ── QuickBooks Online ──────────────────────────────────────────────────────────
+  qbo: {
+    clientId:      process.env.QBO_CLIENT_ID,
+    clientSecret:  process.env.QBO_CLIENT_SECRET,
+    refreshToken:  process.env.QBO_REFRESH_TOKEN,   // set after OAuth setup
+    realmId:       process.env.QBO_REALM_ID,         // set after OAuth setup
+    environment:   process.env.QBO_ENVIRONMENT || 'production', // 'sandbox' | 'production'
+    serviceItemId: process.env.QBO_SERVICE_ITEM_ID || '1',      // QBO item/product ID for the line
+    redirectBase:  process.env.APP_URL || 'https://simpltech-payment.onrender.com',
+  },
+
   server: {
     port: parseInt(process.env.PORT || '3000', 10),
   },
@@ -56,6 +67,17 @@ const config = {
 /** @returns {'pit' | 'oauth'} */
 function ghlAuthMode() {
   return config.ghl.apiKey ? 'pit' : 'oauth';
+}
+
+/**
+ * Returns true when all four QBO env vars are present.
+ * (clientId + clientSecret are set during app registration;
+ *  realmId + refreshToken are set after running /api/qbo/connect.)
+ * @returns {boolean}
+ */
+function qboEnabled() {
+  const q = config.qbo;
+  return !!(q.clientId && q.clientSecret && q.realmId && q.refreshToken);
 }
 
 function validateConfig() {
@@ -78,4 +100,4 @@ function validateConfig() {
   }
 }
 
-module.exports = { config, ghlAuthMode, validateConfig };
+module.exports = { config, ghlAuthMode, qboEnabled, validateConfig };

@@ -10,6 +10,8 @@ const {
   addCustomerUser,
   listTransactions,
 } = require('../services/alternativePayments');
+const { createQBOClientWithInvoice } = require('../services/quickbooks');
+const { qboEnabled, config }         = require('../config');
 
 const router = Router();
 
@@ -63,17 +65,44 @@ router.post('/', async (req, res) => {
     });
   }
 
+  const amountCents = amount ? parseInt(amount, 10) : config.payment.presetAmount;
+  const currency_   = currency ?? config.payment.currency;
+  const dueDays     = due_days ? parseInt(due_days, 10) : 30;
+  const lineDescFinal = lineDesc ?? config.payment.invoiceDescription;
+
+  // ── Step 1: QuickBooks (if configured) ─────────────────────────────────────
+  let qboCustomer = null;
+  let qboInvoice  = null;
+
+  if (qboEnabled()) {
+    try {
+      ({ qboCustomer, qboInvoice } = await createQBOClientWithInvoice({
+        first_name:       firstName,
+        last_name:        lastName,
+        email,
+        phone:            req.body.phone,
+        amount:           amountCents,
+        currency:         currency_,
+        line_description: lineDescFinal,
+        due_days:         dueDays,
+      }));
+    } catch (err) {
+      return res.status(502).json({ ok: false, error: err.message });
+    }
+  }
+
+  // ── Step 2: Alternative Payments ───────────────────────────────────────────
   let result;
   try {
     result = await createClientWithInvoice({
-      first_name: firstName,
-      last_name: lastName,
+      first_name:       firstName,
+      last_name:        lastName,
       email,
-      amount: amount ? parseInt(amount, 10) : undefined,
-      currency,
-      line_description: lineDesc,
-      due_days: due_days ? parseInt(due_days, 10) : undefined,
-      external_id: externalId,
+      amount:           amountCents,
+      currency:         currency_,
+      line_description: lineDescFinal,
+      due_days:         dueDays,
+      external_id:      externalId ?? qboCustomer?.Id,
     });
   } catch (err) {
     return res.status(502).json({ ok: false, error: err.message });
@@ -89,6 +118,7 @@ router.post('/', async (req, res) => {
   // ── JSON response (API / server-side callers) ───────────────────────────────
   return res.status(201).json({
     ok: true,
+    ...(qboCustomer && { qboCustomer, qboInvoice }),
     customer,
     invoice,
     checkoutUrl,
