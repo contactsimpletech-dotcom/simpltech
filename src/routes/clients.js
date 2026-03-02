@@ -85,15 +85,14 @@ router.post('/', async (req, res) => {
   if (!checkoutUrl) {
     return res.status(502).json({
       ok: false,
-      error:
-        'QuickBooks did not return a payment link. ' +
-        'Enable QuickBooks Payments on your account: ' +
-        'QBO → Settings → Payments → Sign up.',
+      error: 'QuickBooks did not return an invoice link. The invoice was created but could not be sent — check that the email address is valid and that the QBO account is active.',
       qboInvoice,
     });
   }
 
-  // ── Redirect the browser to the QBO invoice payment page ───────────────────
+  // ── Redirect the browser to the QBO invoice view page ──────────────────────
+  // The page shows the invoice details. If QuickBooks Payments is enabled on
+  // the account, a "Pay Now" button will also appear on the page.
   if (doRedirect) {
     return res.redirect(302, checkoutUrl);
   }
