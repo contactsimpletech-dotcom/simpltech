@@ -41,13 +41,27 @@ const router = Router();
  * Error response:
  *   502  JSON { ok: false, error: "…" }
  */
-router.post('/', async (req, res) => {
+/**
+ * GET /api/clients?first_name=…&email=…
+ *
+ * Same as POST but reads fields from query string.
+ * Used when GHL redirects here after form submission using merge tags:
+ *   ?first_name={{contact.first_name}}&last_name={{contact.last_name}}
+ *   &email={{contact.email}}&phone={{contact.phone}}
+ */
+router.get('/', (req, res, next) => {
+  req.body = req.query;
+  next();
+}, handleClientInvoice);
+
+router.post('/', handleClientInvoice);
+
+async function handleClientInvoice(req, res) {
   const firstName     = req.body.first_name       ?? req.body.firstName;
   const lastName      = req.body.last_name        ?? req.body.lastName;
   const lineDesc      = req.body.line_description ?? req.body.lineDescription;
   const { email, amount, currency, due_days } = req.body;
 
-  // redirect=true by default — only skip if caller explicitly passes redirect=false
   const doRedirect = req.query.redirect !== 'false';
 
   if (!firstName || !email) {
