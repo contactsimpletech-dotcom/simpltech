@@ -2,16 +2,9 @@ services:
   - type: web
     name: simpltech-ghl-payments
     env: node
-    plan: starter          # persistent disk requires starter or higher
+    plan: free
     buildCommand: yarn install
     startCommand: node src/index.js
     # Credentials are stored in Render → Secret Files as .env
     # Non-secret defaults are listed here for reference only;
     # the .env secret file takes precedence at runtime.
-    envVars:
-      - key: TOKEN_STORE_PATH
-        value: /data/qbo_tokens.json
-    disk:
-      name: qbo-token-store
-      mountPath: /data
-      sizeGB: 1
