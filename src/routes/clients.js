@@ -118,7 +118,7 @@ async function handleClientInvoice(req, res) {
     qboInvoice,
     checkoutUrl,
   });
-});
+}
 
 module.exports = router;
 
