@@ -85,7 +85,36 @@ async function createQBOInvoice(data) {
 }
 
 /**
- * High-level helper: create a QBO customer and a matching draft invoice.
+ * Send a QBO invoice to the customer via email.
+ * QBO API: POST /v3/company/{realmId}/invoice/{id}/send?sendTo={email}
+ *
+ * This triggers the QBO "Review and pay" email and returns the updated
+ * Invoice object which now includes InvoiceLink (the payment URL).
+ *
+ * @param {{ invoiceId: string|number, email: string }} data
+ * @returns {Promise<object>} Updated Invoice object with InvoiceLink populated.
+ */
+async function sendQBOInvoice(data) {
+  const client = await getQBOClient();
+  try {
+    const res = await client.post(
+      `/invoice/${data.invoiceId}/send?sendTo=${encodeURIComponent(data.email)}`,
+      {},
+      { headers: { 'Content-Type': 'application/octet-stream' } },
+    );
+    return res.data.Invoice;
+  } catch (err) {
+    throw normaliseError(err);
+  }
+}
+
+/**
+ * High-level helper: create a QBO customer + invoice, send it via email,
+ * and return both objects along with the InvoiceLink payment URL.
+ *
+ * Sending the invoice via QBO's send API:
+ *   - Emails the client a "Review and pay" link
+ *   - Populates InvoiceLink on the invoice (used for the browser redirect)
  *
  * @param {{
  *   first_name       : string,
@@ -111,7 +140,7 @@ async function createQBOClientWithInvoice(opts) {
     phone:      opts.phone,
   });
 
-  const qboInvoice = await createQBOInvoice({
+  const draft = await createQBOInvoice({
     customerId:  qboCustomer.Id,
     amount:      opts.amount,
     currency:    opts.currency,
@@ -120,7 +149,13 @@ async function createQBOClientWithInvoice(opts) {
     dueDate:     dueDateStr,
   });
 
+  // Send the invoice — this emails the client AND populates InvoiceLink
+  const qboInvoice = await sendQBOInvoice({
+    invoiceId: draft.Id,
+    email:     opts.email,
+  });
+
   return { qboCustomer, qboInvoice };
 }
 
-module.exports = { createQBOCustomer, createQBOInvoice, createQBOClientWithInvoice };
+module.exports = { createQBOCustomer, createQBOInvoice, sendQBOInvoice, createQBOClientWithInvoice };
