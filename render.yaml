@@ -6,13 +6,10 @@ services:
     buildCommand: yarn install
     startCommand: node src/index.js
     envVars:
-      # ── Secrets: paste these two values in Render → Environment ──────────────
       - key: GHL_API_KEY
-        sync: false        # GoHighLevel Private Integration Token (pit-…)
+        value: pit-01167c02-a599-4c3f-a186-3a4b5d507e23
       - key: AP_API_KEY
-        sync: false        # Alternative Payments API key
-
-      # ── Non-secrets: set automatically from this file ─────────────────────────
+        value: Zjg1MDJjZTEtNzk0NS00ZTY0LWFlMWMtYTYyYWZiYjZjNDY3
       - key: AP_CLIENT_SECRET
         value: ""
       - key: PRESET_AMOUNT
