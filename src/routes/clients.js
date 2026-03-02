@@ -14,48 +14,58 @@ const router = Router();
 /**
  * POST /api/clients
  *
- * Create a new customer in Alternative Payments **and** attach a payment
- * request with the preset amount (or an optional override amount).
+ * Create a new customer in GHL **and** attach a payment request with the
+ * preset amount (or an optional override).
  *
- * Body:
+ * Field names mirror the GoHighLevel form builder query keys:
+ *
+ *   Body:
  *   {
- *     name        : string  (required)  — customer display name
- *     email       : string  (required)  — customer e-mail address
- *     phone       : string  (optional)  — E.164 format preferred
- *     address     : object  (optional)  — { line1, city, state, postalCode, country }
- *     description : string  (optional)  — payment description
+ *     first_name  : string  (required)  — maps to GHL firstName
+ *     last_name   : string  (required)  — maps to GHL lastName
+ *     email       : string  (required)
+ *     phone       : string  (optional)  — E.164 preferred, e.g. "+15550001234"
+ *     description : string  (optional)  — payment description shown on checkout
  *     redirectUrl : string  (optional)  — URL to redirect after payment
- *     amount      : number  (optional)  — override amount in cents
- *     currency    : string  (optional)  — ISO 4217, e.g. "USD"
+ *     amount      : number  (optional)  — override preset amount, in cents
+ *     currency    : string  (optional)  — ISO 4217, defaults to PRESET_CURRENCY
+ *     locationId  : string  (optional)  — GHL location/sub-account ID
  *     metadata    : object  (optional)  — arbitrary key-value pairs
  *   }
  *
  * Response 201:
  *   {
  *     ok: true,
- *     customer: { ... },
- *     paymentRequest: { id, url, amount, currency, status, ... },
- *     checkoutUrl: string  — convenience alias for paymentRequest.url
+ *     customer: { id, firstName, lastName, email, … },
+ *     paymentRequest: { id, url, amount, currency, status, … },
+ *     checkoutUrl: string  — share this with the client to collect payment
  *   }
  */
 router.post('/', async (req, res) => {
-  const { name, email, phone, address, description, redirectUrl, amount, currency, metadata } =
+  // Accept both snake_case (form builder query keys) and camelCase.
+  const firstName = req.body.first_name ?? req.body.firstName;
+  const lastName  = req.body.last_name  ?? req.body.lastName;
+  const { email, phone, description, redirectUrl, amount, currency, locationId, metadata } =
     req.body;
 
-  if (!name || !email) {
-    return res.status(400).json({ ok: false, error: '`name` and `email` are required.' });
+  if (!firstName || !email) {
+    return res.status(400).json({
+      ok: false,
+      error: '`first_name` (or `firstName`) and `email` are required.',
+    });
   }
 
   try {
     const result = await createClientWithPresetPayment({
-      name,
+      firstName,
+      lastName: lastName ?? '',
       email,
       phone,
-      address,
       description,
       redirectUrl,
       amount,
       currency,
+      locationId,
       metadata,
     });
 

@@ -1,7 +1,7 @@
 'use strict';
 
 const { Router } = require('express');
-const { getAccessToken } = require('../auth/ghlAuth');
+const { getAccessToken, authMode } = require('../auth/ghlAuth');
 const { config } = require('../config');
 
 const router = Router();
@@ -9,27 +9,31 @@ const router = Router();
 /**
  * GET /api/keys/token
  *
- * Exchange the configured GHL client_id/client_secret for a bearer token and
- * return it (along with masked credential info) so the caller can verify that
- * the API key is working.
+ * Verify the configured GHL credential and return a masked token preview.
  *
- * In production you would NOT expose the raw token to the client — this
- * endpoint is intended for internal health-checks and initial configuration
- * validation.
+ * - PIT mode  : confirms the key is present (no network call required).
+ * - OAuth mode: performs the token exchange and confirms it succeeds.
+ *
+ * Intended for internal health-checks / credential validation only.
  */
 router.get('/token', async (req, res) => {
   try {
     const token = await getAccessToken();
+    const mode  = authMode();
 
     res.json({
       ok: true,
-      message: 'GoHighLevel API key is valid and token exchange succeeded.',
-      credentials: {
-        clientId: maskSecret(config.ghl.clientId),
-        tokenUrl: config.ghl.tokenUrl,
-      },
-      // Return only the first / last 6 chars so the token is verifiable but
-      // not fully exposed in logs or browser history.
+      authMode: mode,
+      message:
+        mode === 'pit'
+          ? 'GoHighLevel Private Integration Token is configured.'
+          : 'GoHighLevel OAuth token exchange succeeded.',
+      credentials:
+        mode === 'pit'
+          ? { apiKey: maskSecret(config.ghl.apiKey) }
+          : { clientId: maskSecret(config.ghl.clientId), tokenUrl: config.ghl.tokenUrl },
+      // Show only the first/last 6 chars — enough to confirm identity without
+      // leaking the full secret into logs or browser history.
       tokenPreview: `${token.slice(0, 6)}…${token.slice(-6)}`,
     });
   } catch (err) {
@@ -40,16 +44,24 @@ router.get('/token', async (req, res) => {
 /**
  * GET /api/keys/config
  *
- * Return the current (masked) configuration so operators can verify which
- * credentials and endpoints are in use without exposing secrets.
+ * Return masked configuration so operators can verify what credentials and
+ * endpoints are in use without exposing secrets.
  */
 router.get('/config', (req, res) => {
+  const mode = authMode();
+
   res.json({
     ok: true,
+    authMode: mode,
     config: {
-      clientId: maskSecret(config.ghl.clientId),
-      tokenUrl: config.ghl.tokenUrl,
+      ...(mode === 'pit'
+        ? { apiKey: maskSecret(config.ghl.apiKey) }
+        : {
+            clientId: maskSecret(config.ghl.clientId),
+            tokenUrl: config.ghl.tokenUrl,
+          }),
       apiBaseUrl: config.ghl.apiBaseUrl,
+      locationId: config.ghl.locationId ?? '(not set)',
       presetAmount: config.payment.presetAmount,
       presetAmountFormatted: formatCents(config.payment.presetAmount, config.payment.currency),
       currency: config.payment.currency,

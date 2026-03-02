@@ -1,32 +1,35 @@
 'use strict';
 
 const axios = require('axios');
-const { config } = require('../config');
+const { config, authMode } = require('../config');
 
 /**
- * In-memory token cache.
- * Stores the current access token and the timestamp at which it expires.
- * A 60-second buffer is subtracted from the expiry to avoid using a token
+ * In-memory cache for OAuth tokens (not used in PIT mode).
+ * A 60-second buffer is applied to the stated expiry to avoid sending a token
  * that is about to expire on the wire.
  */
 const tokenCache = {
   accessToken: null,
-  expiresAt: 0, // Unix timestamp (ms)
+  expiresAt: 0,
 };
 
 /**
- * Exchange the stored client_id / client_secret for a bearer access token
- * using the OAuth 2.0 client_credentials grant.
+ * Resolve the current bearer token.
  *
- * The result is cached in memory; subsequent calls within the token's lifetime
- * return the cached value without hitting the token endpoint again.
+ * - PIT mode  : returns the `pit-…` key directly (no network call).
+ * - OAuth mode: exchanges client_id/secret for a short-lived token and caches
+ *               the result until it expires.
  *
- * @returns {Promise<string>} A valid bearer access token.
+ * @returns {Promise<string>} A valid bearer token string.
  */
 async function getAccessToken() {
-  const now = Date.now();
+  // ── PIT mode ──────────────────────────────────────────────────────────────
+  if (authMode() === 'pit') {
+    return config.ghl.apiKey;
+  }
 
-  // Return cached token if it is still valid.
+  // ── OAuth client_credentials mode ─────────────────────────────────────────
+  const now = Date.now();
   if (tokenCache.accessToken && now < tokenCache.expiresAt) {
     return tokenCache.accessToken;
   }
@@ -48,12 +51,10 @@ async function getAccessToken() {
   }
 
   const { access_token, expires_in } = response.data;
-
   if (!access_token) {
     throw new Error('GoHighLevel token response did not include access_token.');
   }
 
-  // Cache with a 60-second buffer before the stated expiry.
   tokenCache.accessToken = access_token;
   tokenCache.expiresAt = now + (expires_in - 60) * 1000;
 
@@ -61,12 +62,9 @@ async function getAccessToken() {
 }
 
 /**
- * Return a pre-configured axios instance that automatically injects the
- * GoHighLevel bearer token into every request.
+ * Return a pre-configured axios instance with the bearer token already set.
  *
- * Usage:
- *   const client = await getAuthenticatedClient();
- *   const res = await client.get('/alternative-payments/customers');
+ * @returns {Promise<import('axios').AxiosInstance>}
  */
 async function getAuthenticatedClient() {
   const token = await getAccessToken();
@@ -77,19 +75,19 @@ async function getAuthenticatedClient() {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
       Accept: 'application/json',
-      Version: '2021-07-28', // GHL API version header
+      Version: '2021-07-28', // required by GHL API v2
     },
   });
 }
 
 /**
- * Force-clear the cached token.
- * Useful in tests or when a 401 response is received on a real request,
- * indicating the token was revoked externally.
+ * Force-clear the cached OAuth token.
+ * Call this when a 401 is received on a real request so the next
+ * call re-fetches a fresh token.  No-op in PIT mode.
  */
 function invalidateToken() {
   tokenCache.accessToken = null;
   tokenCache.expiresAt = 0;
 }
 
-module.exports = { getAccessToken, getAuthenticatedClient, invalidateToken };
+module.exports = { getAccessToken, getAuthenticatedClient, invalidateToken, authMode };
