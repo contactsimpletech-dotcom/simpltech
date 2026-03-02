@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: simpltech-ghl-payments
+    env: node
+    plan: free
+    buildCommand: yarn install
+    startCommand: node src/index.js
+    envVars:
+      # ── Secrets: paste these two values in Render → Environment ──────────────
+      - key: GHL_API_KEY
+        sync: false        # GoHighLevel Private Integration Token (pit-…)
+      - key: AP_API_KEY
+        sync: false        # Alternative Payments API key
+
+      # ── Non-secrets: set automatically from this file ─────────────────────────
+      - key: AP_CLIENT_SECRET
+        value: ""
+      - key: PRESET_AMOUNT
+        value: "7500"
+      - key: PRESET_CURRENCY
+        value: "USD"
+      - key: INVOICE_DESCRIPTION
+        value: "Service fee"
+      - key: NODE_ENV
+        value: production
