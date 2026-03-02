@@ -47,8 +47,9 @@ const config = {
   },
 
   payment: {
-    presetAmount: parseInt(process.env.PRESET_AMOUNT || '5000', 10), // cents
+    presetAmount: parseInt(process.env.PRESET_AMOUNT || '7500', 10), // cents; default $75.00
     currency: process.env.PRESET_CURRENCY || 'USD',
+    invoiceDescription: process.env.INVOICE_DESCRIPTION || 'Service fee',
   },
 };
 

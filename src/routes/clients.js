@@ -2,7 +2,7 @@
 
 const { Router } = require('express');
 const {
-  createClientWithPresetPayment,
+  createClientWithInvoice,
   getCustomer,
   listCustomers,
   archiveCustomer,
@@ -16,36 +16,45 @@ const router = Router();
 /**
  * POST /api/clients
  *
- * Create an Alternative Payments customer and immediately attach a payment
- * request for the preset amount (or an overridden amount).
+ * Called when a client submits the intake form.
  *
- * Body — accepts both GoHighLevel form query keys (snake_case) and camelCase:
- *   {
- *     first_name   : string  (required)
- *     last_name    : string  (optional)
- *     email        : string  (required)
- *     redirect_url : string  (optional) — where to send payer after checkout
- *     reference_id : string  (optional) — your internal reference
- *     external_id  : string  (optional) — e.g. GHL contact ID
- *     amount       : number  (optional) — override in cents
- *     currency     : string  (optional) — ISO 4217, default PRESET_CURRENCY
- *   }
+ * What happens:
+ *   1. Creates an Alternative Payments customer from the form fields.
+ *   2. Creates a $75 invoice (one line item) for that customer.
+ *   3. Fetches the hosted invoice payment link.
+ *   4. Redirects the client's browser to the invoice checkout page (302).
+ *      If called from a server / API client (not a browser form), pass
+ *      ?redirect=false to receive JSON instead.
  *
- * Response 201:
- *   {
- *     ok: true,
- *     customer:       { id, name, email, external_id, created_at }
- *     paymentRequest: { id, url, status }
- *     checkoutUrl:    string  — share with the client to collect payment
- *   }
+ * Form field names (GHL form builder query keys):
+ *   first_name   — required
+ *   last_name    — optional
+ *   email        — required
+ *   phone        — optional (stored for reference)
+ *
+ * Optional overrides:
+ *   amount           — invoice total in cents (default: PRESET_AMOUNT = 7500)
+ *   currency         — ISO 4217 (default: PRESET_CURRENCY = USD)
+ *   line_description — line-item label on the invoice (default: INVOICE_DESCRIPTION)
+ *   due_days         — days until invoice due date (default: 30)
+ *   external_id      — your own reference ID stored on the AP customer record
+ *
+ * Success responses:
+ *   302  Location: https://checkout.alternativepayments.io/pay/inv_xxx   (default)
+ *   201  JSON { ok, customer, invoice, checkoutUrl }                     (?redirect=false)
+ *
+ * Error response:
+ *   502  JSON { ok: false, error: "…" }
  */
 router.post('/', async (req, res) => {
-  const firstName   = req.body.first_name  ?? req.body.firstName;
-  const lastName    = req.body.last_name   ?? req.body.lastName;
-  const redirectUrl = req.body.redirect_url ?? req.body.redirectUrl;
-  const referenceId = req.body.reference_id ?? req.body.referenceId;
-  const externalId  = req.body.external_id  ?? req.body.externalId;
-  const { email, amount, currency } = req.body;
+  const firstName      = req.body.first_name      ?? req.body.firstName;
+  const lastName       = req.body.last_name       ?? req.body.lastName;
+  const lineDesc       = req.body.line_description ?? req.body.lineDescription;
+  const externalId     = req.body.external_id     ?? req.body.externalId;
+  const { email, amount, currency, due_days } = req.body;
+
+  // redirect=true by default — only skip if caller explicitly passes redirect=false
+  const doRedirect = req.query.redirect !== 'false';
 
   if (!firstName || !email) {
     return res.status(400).json({
@@ -54,28 +63,39 @@ router.post('/', async (req, res) => {
     });
   }
 
+  let result;
   try {
-    const result = await createClientWithPresetPayment({
+    result = await createClientWithInvoice({
       first_name: firstName,
       last_name: lastName,
       email,
-      amount,
+      amount: amount ? parseInt(amount, 10) : undefined,
       currency,
-      redirect_url: redirectUrl,
-      reference_id: referenceId,
+      line_description: lineDesc,
+      due_days: due_days ? parseInt(due_days, 10) : undefined,
       external_id: externalId,
-    });
-
-    return res.status(201).json({
-      ok: true,
-      customer: result.customer,
-      paymentRequest: result.paymentRequest,
-      checkoutUrl: result.checkoutUrl,
     });
   } catch (err) {
     return res.status(502).json({ ok: false, error: err.message });
   }
+
+  const { customer, invoice, checkoutUrl } = result;
+
+  // ── Redirect the browser to the invoice checkout page ──────────────────────
+  if (doRedirect && checkoutUrl) {
+    return res.redirect(302, checkoutUrl);
+  }
+
+  // ── JSON response (API / server-side callers) ───────────────────────────────
+  return res.status(201).json({
+    ok: true,
+    customer,
+    invoice,
+    checkoutUrl,
+  });
 });
+
+// ─── Other customer routes ────────────────────────────────────────────────────
 
 /** GET /api/clients — list customers */
 router.get('/', async (req, res) => {
@@ -92,7 +112,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-/** GET /api/clients/:id — retrieve one customer */
+/** GET /api/clients/:id */
 router.get('/:id', async (req, res) => {
   try {
     const customer = await getCustomer(req.params.id);
@@ -102,7 +122,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-/** DELETE /api/clients/:id — archive a customer */
+/** DELETE /api/clients/:id — archive */
 router.delete('/:id', async (req, res) => {
   try {
     await archiveCustomer(req.params.id);
@@ -112,7 +132,7 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-/** GET /api/clients/:id/users — list customer users */
+/** GET /api/clients/:id/users */
 router.get('/:id/users', async (req, res) => {
   try {
     const users = await listCustomerUsers(req.params.id);
@@ -122,14 +142,14 @@ router.get('/:id/users', async (req, res) => {
   }
 });
 
-/**
- * POST /api/clients/:id/users — add a user to a customer
- * Body: { email, first_name, last_name }
- */
+/** POST /api/clients/:id/users — body: { email, first_name, last_name } */
 router.post('/:id/users', async (req, res) => {
   const { email, first_name, last_name } = req.body;
   if (!email || !first_name || !last_name) {
-    return res.status(400).json({ ok: false, error: '`email`, `first_name`, and `last_name` are required.' });
+    return res.status(400).json({
+      ok: false,
+      error: '`email`, `first_name`, and `last_name` are required.',
+    });
   }
   try {
     const user = await addCustomerUser(req.params.id, { email, first_name, last_name });
@@ -139,7 +159,7 @@ router.post('/:id/users', async (req, res) => {
   }
 });
 
-/** GET /api/clients/:id/transactions — list a customer's transactions */
+/** GET /api/clients/:id/transactions */
 router.get('/:id/transactions', async (req, res) => {
   try {
     const data = await listTransactions({ customer_id: req.params.id });

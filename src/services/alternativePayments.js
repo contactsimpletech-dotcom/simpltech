@@ -198,26 +198,72 @@ async function getPayoutTransactions(id) {
   return withAuth((c) => c.get(`/payouts/${id}/transactions`));
 }
 
-// ─── High-level helper ────────────────────────────────────────────────────────
+// ─── High-level helpers ───────────────────────────────────────────────────────
 
 /**
- * Create an AP customer and immediately issue a payment request at the
- * preset amount.
+ * Primary form-submission flow:
+ *   1. Create AP customer from form fields (first_name, last_name, email).
+ *   2. Create an invoice for the preset amount ($75 by default) with a
+ *      single line item.
+ *   3. Fetch the hosted invoice payment link.
+ *   4. Return customer, invoice, and the checkout URL to redirect the client.
  *
- * Input field names mirror the GoHighLevel form builder query keys:
- *   first_name, last_name, email, phone
+ * Input field names mirror the GoHighLevel form builder query keys.
  *
  * @param {{
- *   first_name   : string,
- *   last_name?   : string,
- *   email        : string,
- *   amount?      : number,     // cents override; falls back to PRESET_AMOUNT
- *   currency?    : string,
- *   redirect_url?: string,
- *   reference_id?: string,
- *   external_id? : string      // e.g. GHL contact ID for cross-referencing
+ *   first_name       : string,
+ *   last_name?       : string,
+ *   email            : string,
+ *   amount?          : number,   // cents override; falls back to PRESET_AMOUNT
+ *   currency?        : string,   // falls back to PRESET_CURRENCY
+ *   line_description?: string,   // line-item label shown on the invoice
+ *   due_days?        : number,   // days until due (default 30)
+ *   external_id?     : string    // e.g. GHL contact ID for cross-referencing
  * }} opts
- * @returns {Promise<{ customer: object, paymentRequest: object, checkoutUrl: string }>}
+ * @returns {Promise<{ customer: object, invoice: object, checkoutUrl: string }>}
+ */
+async function createClientWithInvoice(opts) {
+  const fullName = [opts.first_name, opts.last_name].filter(Boolean).join(' ');
+  const amount   = opts.amount   ?? config.payment.presetAmount;
+  const currency = opts.currency ?? config.payment.currency;
+
+  // ── 1. Create customer ──────────────────────────────────────────────────────
+  const customer = await createCustomer({
+    name: fullName,
+    email: opts.email,
+    ...(opts.external_id && { external_id: opts.external_id }),
+  });
+
+  // ── 2. Create invoice ───────────────────────────────────────────────────────
+  const dueDays = opts.due_days ?? 30;
+  const dueDate = new Date();
+  dueDate.setDate(dueDate.getDate() + dueDays);
+  const due_date = dueDate.toISOString().split('T')[0]; // "YYYY-MM-DD"
+
+  const invoice = await createInvoice({
+    customer_id: customer.id,
+    currency,
+    due_date,
+    line_items: [
+      {
+        description: opts.line_description ?? config.payment.invoiceDescription,
+        amount,
+        quantity: 1,
+      },
+    ],
+  });
+
+  // ── 3. Fetch hosted payment link ────────────────────────────────────────────
+  const linkData   = await getInvoicePaymentLink(invoice.id);
+  const checkoutUrl = linkData.url ?? null;
+
+  return { customer, invoice, checkoutUrl };
+}
+
+/**
+ * Legacy helper — creates a customer and a one-off payment request (not tied
+ * to an invoice).  Kept for backwards compatibility; prefer createClientWithInvoice
+ * for new form-submission flows.
  */
 async function createClientWithPresetPayment(opts) {
   const fullName = [opts.first_name, opts.last_name].filter(Boolean).join(' ');
@@ -235,9 +281,7 @@ async function createClientWithPresetPayment(opts) {
     reference_id: opts.reference_id ?? customer.id,
   });
 
-  const checkoutUrl = paymentRequest.url ?? null;
-
-  return { customer, paymentRequest, checkoutUrl };
+  return { customer, paymentRequest, checkoutUrl: paymentRequest.url ?? null };
 }
 
 module.exports = {
@@ -262,5 +306,6 @@ module.exports = {
   getPayout,
   getPayoutTransactions,
   // High-level
+  createClientWithInvoice,
   createClientWithPresetPayment,
 };
