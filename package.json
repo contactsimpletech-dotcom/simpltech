@@ -1,0 +1,16 @@
+{
+  "name": "simpltech-gohighlevel-payments",
+  "version": "1.0.0",
+  "description": "GoHighLevel Alternative Payments integration — API key auth, customer creation, and preset-amount payment requests",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "demo": "node src/demo.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.2",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  }
+}
