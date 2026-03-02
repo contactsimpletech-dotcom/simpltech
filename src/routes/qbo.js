@@ -127,4 +127,27 @@ router.get('/callback', async (req, res) => {
 </html>`);
 });
 
+/**
+ * GET /api/qbo/status
+ *
+ * Debug endpoint — shows whether QBO is configured and what token is loaded.
+ * Tokens are masked; safe to visit in a browser.
+ */
+router.get('/status', (req, res) => {
+  const q  = config.qbo;
+  const rt = q.refreshToken;
+  const masked = rt
+    ? `${rt.slice(0, 10)}…${rt.slice(-6)}  (${rt.length} chars)`
+    : null;
+
+  res.json({
+    enabled:             !!(q.clientId && q.clientSecret && q.realmId && rt),
+    environment:         q.environment,
+    realmId:             q.realmId  || '(not set)',
+    clientId:            q.clientId ? `${q.clientId.slice(0, 6)}…` : '(not set)',
+    refreshToken:        masked     || '(not set)',
+    renderApiAutoUpdate: !!(process.env.RENDER_API_KEY && process.env.RENDER_SERVICE_ID),
+  });
+});
+
 module.exports = router;
