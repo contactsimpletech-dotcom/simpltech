@@ -3,12 +3,13 @@
 const { Router } = require('express');
 const axios      = require('axios');
 const { config } = require('../config');
+const tokenStore = require('../store/tokenStore');
 
 const router = Router();
 
-const INTUIT_AUTH_URL = 'https://appcenter.intuit.com/connect/oauth2';
+const INTUIT_AUTH_URL  = 'https://appcenter.intuit.com/connect/oauth2';
 const INTUIT_TOKEN_URL = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer';
-const QBO_SCOPE = 'com.intuit.quickbooks.accounting';
+const QBO_SCOPE        = 'com.intuit.quickbooks.accounting';
 
 /**
  * GET /api/qbo/connect
@@ -40,8 +41,10 @@ router.get('/connect', (req, res) => {
  * GET /api/qbo/callback
  *
  * Intuit redirects here after the user authorises the app.
- * Exchanges the one-time code for access + refresh tokens and displays
- * the values the user needs to copy into Render.
+ * Exchanges the one-time code for access + refresh tokens, saves them to the
+ * persistent token store, and updates the in-memory config.
+ *
+ * No manual copy-paste step is required — the app is ready immediately.
  */
 router.get('/callback', async (req, res) => {
   const { code, realmId, error } = req.query;
@@ -83,7 +86,19 @@ router.get('/callback', async (req, res) => {
     );
   }
 
-  // ── Display tokens for the user to copy into Render ──────────────────────────
+  // ── Persist tokens to the store (the DB) ─────────────────────────────────
+  tokenStore.save({
+    qbo_refresh_token: data.refresh_token,
+    qbo_realm_id:      realmId,
+  });
+
+  // ── Update in-memory config so subsequent calls in this process work ──────
+  config.qbo.refreshToken = data.refresh_token;
+  config.qbo.realmId      = realmId;
+
+  console.log('[QBO] OAuth complete. Tokens saved to store. realmId:', realmId);
+
+  // ── Confirm to the user — no manual copy step needed ─────────────────────
   return res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -94,34 +109,39 @@ router.get('/callback', async (req, res) => {
     h2   { color: #166534; }
     .box { background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 10px; padding: 20px 24px; margin: 20px 0; }
     .row { display: flex; justify-content: space-between; align-items: center; margin: 10px 0; }
-    .label { font-weight: 700; color: #166534; font-size: .9rem; min-width: 200px; }
+    .label { font-weight: 700; color: #166534; font-size: .9rem; min-width: 160px; }
     .val  { font-family: monospace; font-size: .85rem; background: #fff; border: 1px solid #d1fae5;
             border-radius: 6px; padding: 6px 10px; word-break: break-all; }
-    .warn { background: #fefce8; border: 1px solid #fde047; border-radius: 8px;
-            padding: 14px 18px; margin-top: 20px; color: #854d0e; font-size: .9rem; }
+    .info { background: #eff6ff; border: 1px solid #93c5fd; border-radius: 8px;
+            padding: 14px 18px; margin-top: 20px; color: #1e40af; font-size: .9rem; }
     .step { margin: 6px 0; }
   </style>
 </head>
 <body>
   <h2>QuickBooks Connected!</h2>
-  <p>Copy these two values into Render → your service → Environment:</p>
+  <p>Tokens saved automatically — no copy-paste required.</p>
 
   <div class="box">
     <div class="row">
-      <span class="label">QBO_REALM_ID</span>
+      <span class="label">Realm ID</span>
       <span class="val">${realmId}</span>
     </div>
     <div class="row">
-      <span class="label">QBO_REFRESH_TOKEN</span>
-      <span class="val">${data.refresh_token}</span>
+      <span class="label">Refresh token</span>
+      <span class="val">saved to store ✓</span>
+    </div>
+    <div class="row">
+      <span class="label">Store path</span>
+      <span class="val">${tokenStore.STORE_PATH}</span>
     </div>
   </div>
 
-  <div class="warn">
-    <strong>Important:</strong>
-    <div class="step">• The refresh token expires in <strong>100 days</strong>.</div>
-    <div class="step">• Before it expires, visit <code>/api/qbo/connect</code> again to renew it.</div>
-    <div class="step">• After saving in Render, redeploy the service.</div>
+  <div class="info">
+    <strong>What happens next:</strong>
+    <div class="step">• Every token rotation is written to the store automatically.</div>
+    <div class="step">• You never need to copy tokens to Render env vars again.</div>
+    <div class="step">• The refresh token expires in <strong>100 days</strong> — revisit
+      <code>/api/qbo/connect</code> before then to renew.</div>
   </div>
 </body>
 </html>`);
@@ -140,12 +160,20 @@ router.get('/status', (req, res) => {
     ? `${rt.slice(0, 10)}…${rt.slice(-6)}  (${rt.length} chars)`
     : null;
 
+  const stored = tokenStore.load();
+
   res.json({
-    enabled:             !!(q.clientId && q.clientSecret && q.realmId && rt),
-    environment:         q.environment,
-    realmId:             q.realmId  || '(not set)',
-    clientId:            q.clientId ? `${q.clientId.slice(0, 6)}…` : '(not set)',
-    refreshToken:        masked     || '(not set)',
+    enabled:      !!(q.clientId && q.clientSecret && q.realmId && rt),
+    environment:  q.environment,
+    realmId:      q.realmId  || '(not set)',
+    clientId:     q.clientId ? `${q.clientId.slice(0, 6)}…` : '(not set)',
+    refreshToken: masked     || '(not set)',
+    store: {
+      path:       tokenStore.STORE_PATH,
+      hasToken:   !!stored.qbo_refresh_token,
+      hasRealmId: !!stored.qbo_realm_id,
+      updatedAt:  stored.updated_at || null,
+    },
     renderApiAutoUpdate: !!(process.env.RENDER_API_KEY && process.env.RENDER_SERVICE_ID),
   });
 });
