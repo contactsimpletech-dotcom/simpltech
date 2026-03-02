@@ -1,27 +1,23 @@
 'use strict';
 
-const { getAuthenticatedClient, invalidateToken } = require('../auth/ghlAuth');
+const { getAPClient, invalidateAPToken } = require('../auth/apAuth');
 const { config } = require('../config');
 
-// ─── Base paths ───────────────────────────────────────────────────────────────
-const AP_BASE = '/alternative-payments';   // Alternative Payments endpoints
-const CT_BASE = '/contacts';               // GHL Contacts API (customer creation)
-
 /**
- * Thin wrapper that:
- *  1. Obtains an authenticated axios client.
- *  2. On a 401, invalidates the cached token and retries once.
- *  3. Normalises errors into descriptive Error objects.
+ * Execute a request against the AP API.
+ * On a 401, the cached token is invalidated and the request retried once.
+ *
+ * @param {(client: import('axios').AxiosInstance) => Promise<import('axios').AxiosResponse>} fn
  */
 async function withAuth(fn) {
-  let client = await getAuthenticatedClient();
+  let client = await getAPClient();
   try {
     const res = await fn(client);
     return res.data;
   } catch (err) {
     if (err.response?.status === 401) {
-      invalidateToken();
-      client = await getAuthenticatedClient();
+      invalidateAPToken();
+      client = await getAPClient();
       try {
         const res = await fn(client);
         return res.data;
@@ -36,162 +32,235 @@ async function withAuth(fn) {
 function normaliseError(err) {
   const detail = err.response?.data ?? err.message;
   const status = err.response?.status ?? 'N/A';
-  return new Error(`GHL API error [${status}]: ${JSON.stringify(detail)}`);
+  return new Error(`Alternative Payments API [${status}]: ${JSON.stringify(detail)}`);
 }
 
-// ─── Customers / Contacts ─────────────────────────────────────────────────────
+// ─── Customers ────────────────────────────────────────────────────────────────
 
 /**
- * Create a customer using the GHL Contacts API.
- *
- * Field names mirror the GoHighLevel form builder query keys:
- *   first_name, last_name, email, phone
+ * Create a customer.
+ * AP API: POST /customers
  *
  * @param {{
- *   firstName : string,
- *   lastName  : string,
- *   email     : string,
- *   phone?    : string,
- *   address1? : string,
- *   city?     : string,
- *   state?    : string,
- *   postalCode?: string,
- *   country?  : string,
- *   tags?     : string[],
- *   customFields?: Array<{ id: string, value: string }>,
- *   locationId?: string
- * }} customerData
- * @returns {Promise<object>} The created contact object.
+ *   name        : string,   // required — full name or company name
+ *   email       : string,   // required
+ *   external_id?: string    // your internal reference (e.g. GHL contact ID)
+ * }} data
  */
-async function createCustomer(customerData) {
-  const body = {
-    firstName: customerData.firstName,
-    lastName: customerData.lastName,
-    email: customerData.email,
-    ...(customerData.phone && { phone: customerData.phone }),
-    ...(customerData.address1 && { address1: customerData.address1 }),
-    ...(customerData.city && { city: customerData.city }),
-    ...(customerData.state && { state: customerData.state }),
-    ...(customerData.postalCode && { postalCode: customerData.postalCode }),
-    ...(customerData.country && { country: customerData.country }),
-    ...(customerData.tags && { tags: customerData.tags }),
-    ...(customerData.customFields && { customFields: customerData.customFields }),
-    // locationId is required by the Contacts API; fall back to env var.
-    locationId: customerData.locationId ?? config.ghl.locationId,
-  };
-
-  return withAuth((client) => client.post(CT_BASE + '/', body));
+async function createCustomer(data) {
+  return withAuth((c) => c.post('/customers', {
+    name: data.name,
+    email: data.email,
+    ...(data.external_id && { external_id: data.external_id }),
+  }));
 }
 
 /**
- * Fetch a contact/customer by ID.
+ * Retrieve a customer by ID.
+ * AP API: GET /customers/{id}
  */
-async function getCustomer(customerId) {
-  return withAuth((client) => client.get(`${CT_BASE}/${customerId}`));
+async function getCustomer(id) {
+  return withAuth((c) => c.get(`/customers/${id}`));
 }
 
 /**
- * List contacts with optional cursor-based pagination.
+ * List customers with optional pagination / filters.
+ * AP API: GET /customers
+ *
+ * @param {{ limit?: number, after?: string, company_name?: string }} [params]
  */
-async function listCustomers(pagination = {}) {
-  return withAuth((client) =>
-    client.get(CT_BASE + '/', { params: { locationId: config.ghl.locationId, ...pagination } }),
-  );
+async function listCustomers(params = {}) {
+  return withAuth((c) => c.get('/customers', { params }));
+}
+
+/**
+ * Archive (soft-delete) a customer.
+ * AP API: DELETE /customers/{id}
+ */
+async function archiveCustomer(id) {
+  return withAuth((c) => c.delete(`/customers/${id}`));
+}
+
+/**
+ * List users belonging to a customer.
+ * AP API: GET /customers/{id}/users
+ */
+async function listCustomerUsers(customerId) {
+  return withAuth((c) => c.get(`/customers/${customerId}/users`));
+}
+
+/**
+ * Add a user to a customer.
+ * AP API: POST /customers/{id}/users
+ *
+ * @param {string} customerId
+ * @param {{ email: string, first_name: string, last_name: string }} user
+ */
+async function addCustomerUser(customerId, user) {
+  return withAuth((c) => c.post(`/customers/${customerId}/users`, user));
 }
 
 // ─── Payment Requests ─────────────────────────────────────────────────────────
 
 /**
- * Create a one-off payment request (hosted checkout link) in Alternative Payments.
+ * Create a one-off payment request (hosted checkout link).
+ * AP API: POST /payments/request
  *
  * @param {{
- *   customerId  : string,
- *   amount?     : number,   // cents — falls back to PRESET_AMOUNT env var
- *   currency?   : string,   // ISO 4217 — falls back to PRESET_CURRENCY env var
- *   description?: string,
- *   redirectUrl?: string,
- *   metadata?   : Record<string, string>
- * }} paymentData
- * @returns {Promise<object>} Payment request including a hosted checkout URL.
+ *   amount      : number,   // cents (e.g. 5000 = $50.00)
+ *   currency    : string,   // ISO 4217 e.g. "USD"
+ *   redirect_url: string,   // where to send the payer after checkout
+ *   reference_id?: string   // your internal reference ID
+ * }} data
  */
-async function createPaymentRequest(paymentData) {
-  const body = {
-    customerId: paymentData.customerId,
-    amount: paymentData.amount ?? config.payment.presetAmount,
-    currency: paymentData.currency ?? config.payment.currency,
-    description: paymentData.description ?? 'Payment request',
-    ...(paymentData.redirectUrl && { redirectUrl: paymentData.redirectUrl }),
-    ...(paymentData.metadata && { metadata: paymentData.metadata }),
-  };
-
-  return withAuth((client) => client.post(`${AP_BASE}/payment-requests`, body));
+async function createPaymentRequest(data) {
+  return withAuth((c) => c.post('/payments/request', {
+    amount: String(data.amount ?? config.payment.presetAmount),
+    currency: data.currency ?? config.payment.currency,
+    redirect_url: data.redirect_url ?? '',
+    ...(data.reference_id && { reference_id: data.reference_id }),
+  }));
 }
 
 /**
- * Create a customer (using GHL form field names) and immediately attach a
- * preset-amount payment request.
- *
- * Input field names match the GoHighLevel form builder query keys:
- *   first_name → firstName
- *   last_name  → lastName
- *   email      → email
- *   phone      → phone
+ * Retrieve the current status of a payment request.
+ * AP API: GET /payments/request/{id}
+ */
+async function getPaymentRequest(id) {
+  return withAuth((c) => c.get(`/payments/request/${id}`));
+}
+
+// ─── Invoices ─────────────────────────────────────────────────────────────────
+
+/**
+ * Create an invoice with line items.
+ * AP API: POST /invoices
  *
  * @param {{
- *   firstName   : string,
- *   lastName    : string,
- *   email       : string,
- *   phone?      : string,
- *   description?: string,
- *   redirectUrl?: string,
- *   amount?     : number,
- *   currency?   : string,
- *   locationId? : string,
- *   metadata?   : Record<string, string>
- * }} opts
- * @returns {Promise<{ customer: object, paymentRequest: object }>}
+ *   customer_id : string,
+ *   currency    : string,
+ *   due_date    : string,   // ISO date e.g. "2025-09-01"
+ *   line_items  : Array<{ description: string, amount: number, quantity: number }>
+ * }} data
  */
-async function createClientWithPresetPayment(opts) {
-  const customer = await createCustomer({
-    firstName: opts.firstName,
-    lastName: opts.lastName,
-    email: opts.email,
-    phone: opts.phone,
-    locationId: opts.locationId,
-    ...(opts.metadata && { customFields: opts.metadata }),
-  });
+async function createInvoice(data) {
+  return withAuth((c) => c.post('/invoices', data));
+}
 
-  // GHL Contacts API wraps the contact under a `contact` key.
-  const contactId = customer.contact?.id ?? customer.id;
+/**
+ * Get the hosted payment link for an invoice.
+ * AP API: GET /invoices/{id}/payment-link
+ */
+async function getInvoicePaymentLink(invoiceId) {
+  return withAuth((c) => c.get(`/invoices/${invoiceId}/payment-link`));
+}
 
-  const paymentRequest = await createPaymentRequest({
-    customerId: contactId,
-    amount: opts.amount,
-    currency: opts.currency,
-    description: opts.description,
-    redirectUrl: opts.redirectUrl,
-    metadata: opts.metadata,
-  });
-
-  return { customer: customer.contact ?? customer, paymentRequest };
+/**
+ * Get a signed PDF download URL for an invoice.
+ * AP API: GET /invoices/{id}/pdf-link
+ */
+async function getInvoicePdfLink(invoiceId) {
+  return withAuth((c) => c.get(`/invoices/${invoiceId}/pdf-link`));
 }
 
 // ─── Transactions ─────────────────────────────────────────────────────────────
 
 /**
- * List transactions with optional filters.
+ * List transactions.
+ * AP API: GET /payments
+ *
+ * @param {{
+ *   status?        : string,
+ *   type?          : string,
+ *   payment_method?: string,
+ *   invoice_id?    : string,
+ *   customer_id?   : string
+ * }} [filters]
  */
 async function listTransactions(filters = {}) {
-  return withAuth((client) =>
-    client.get(`${AP_BASE}/transactions`, { params: filters }),
-  );
+  return withAuth((c) => c.get('/payments', { params: filters }));
+}
+
+// ─── Payouts ──────────────────────────────────────────────────────────────────
+
+/** List all payouts. AP API: GET /payouts */
+async function listPayouts(params = {}) {
+  return withAuth((c) => c.get('/payouts', { params }));
+}
+
+/** Get a single payout. AP API: GET /payouts/{id} */
+async function getPayout(id) {
+  return withAuth((c) => c.get(`/payouts/${id}`));
+}
+
+/** Get transactions rolled into a payout. AP API: GET /payouts/{id}/transactions */
+async function getPayoutTransactions(id) {
+  return withAuth((c) => c.get(`/payouts/${id}/transactions`));
+}
+
+// ─── High-level helper ────────────────────────────────────────────────────────
+
+/**
+ * Create an AP customer and immediately issue a payment request at the
+ * preset amount.
+ *
+ * Input field names mirror the GoHighLevel form builder query keys:
+ *   first_name, last_name, email, phone
+ *
+ * @param {{
+ *   first_name   : string,
+ *   last_name?   : string,
+ *   email        : string,
+ *   amount?      : number,     // cents override; falls back to PRESET_AMOUNT
+ *   currency?    : string,
+ *   redirect_url?: string,
+ *   reference_id?: string,
+ *   external_id? : string      // e.g. GHL contact ID for cross-referencing
+ * }} opts
+ * @returns {Promise<{ customer: object, paymentRequest: object, checkoutUrl: string }>}
+ */
+async function createClientWithPresetPayment(opts) {
+  const fullName = [opts.first_name, opts.last_name].filter(Boolean).join(' ');
+
+  const customer = await createCustomer({
+    name: fullName,
+    email: opts.email,
+    external_id: opts.external_id,
+  });
+
+  const paymentRequest = await createPaymentRequest({
+    amount: opts.amount,
+    currency: opts.currency,
+    redirect_url: opts.redirect_url ?? '',
+    reference_id: opts.reference_id ?? customer.id,
+  });
+
+  const checkoutUrl = paymentRequest.url ?? null;
+
+  return { customer, paymentRequest, checkoutUrl };
 }
 
 module.exports = {
+  // Customers
   createCustomer,
   getCustomer,
   listCustomers,
+  archiveCustomer,
+  listCustomerUsers,
+  addCustomerUser,
+  // Payment Requests
   createPaymentRequest,
-  createClientWithPresetPayment,
+  getPaymentRequest,
+  // Invoices
+  createInvoice,
+  getInvoicePaymentLink,
+  getInvoicePdfLink,
+  // Transactions
   listTransactions,
+  // Payouts
+  listPayouts,
+  getPayout,
+  getPayoutTransactions,
+  // High-level
+  createClientWithPresetPayment,
 };

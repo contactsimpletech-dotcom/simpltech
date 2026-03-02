@@ -1,7 +1,7 @@
 'use strict';
 
 const axios = require('axios');
-const { config, authMode } = require('../config');
+const { config, ghlAuthMode } = require('../config');
 
 /**
  * In-memory cache for OAuth tokens (not used in PIT mode).
@@ -24,7 +24,7 @@ const tokenCache = {
  */
 async function getAccessToken() {
   // ── PIT mode ──────────────────────────────────────────────────────────────
-  if (authMode() === 'pit') {
+  if (ghlAuthMode() === 'pit') {
     return config.ghl.apiKey;
   }
 
@@ -90,4 +90,4 @@ function invalidateToken() {
   tokenCache.expiresAt = 0;
 }
 
-module.exports = { getAccessToken, getAuthenticatedClient, invalidateToken, authMode };
+module.exports = { getAccessToken, getAuthenticatedClient, invalidateToken, ghlAuthMode };

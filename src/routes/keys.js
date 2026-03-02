@@ -1,7 +1,8 @@
 'use strict';
 
 const { Router } = require('express');
-const { getAccessToken, authMode } = require('../auth/ghlAuth');
+const { getAPToken } = require('../auth/apAuth');
+const { getAccessToken, ghlAuthMode } = require('../auth/ghlAuth');
 const { config } = require('../config');
 
 const router = Router();
@@ -9,59 +10,65 @@ const router = Router();
 /**
  * GET /api/keys/token
  *
- * Verify the configured GHL credential and return a masked token preview.
- *
- * - PIT mode  : confirms the key is present (no network call required).
- * - OAuth mode: performs the token exchange and confirms it succeeds.
- *
- * Intended for internal health-checks / credential validation only.
+ * Verify BOTH the GHL key and the Alternative Payments API key by attempting
+ * live token resolutions and returning masked previews.
  */
 router.get('/token', async (req, res) => {
-  try {
-    const token = await getAccessToken();
-    const mode  = authMode();
+  const results = {};
 
-    res.json({
+  // ── GHL ──────────────────────────────────────────────────────────────────
+  try {
+    const token  = await getAccessToken();
+    const mode   = ghlAuthMode();
+    results.ghl  = {
       ok: true,
       authMode: mode,
-      message:
-        mode === 'pit'
-          ? 'GoHighLevel Private Integration Token is configured.'
-          : 'GoHighLevel OAuth token exchange succeeded.',
-      credentials:
-        mode === 'pit'
-          ? { apiKey: maskSecret(config.ghl.apiKey) }
-          : { clientId: maskSecret(config.ghl.clientId), tokenUrl: config.ghl.tokenUrl },
-      // Show only the first/last 6 chars — enough to confirm identity without
-      // leaking the full secret into logs or browser history.
-      tokenPreview: `${token.slice(0, 6)}…${token.slice(-6)}`,
-    });
+      message: mode === 'pit' ? 'PIT token confirmed.' : 'OAuth token exchange succeeded.',
+      tokenPreview: `${token.slice(0, 8)}…${token.slice(-4)}`,
+    };
   } catch (err) {
-    res.status(502).json({ ok: false, error: err.message });
+    results.ghl = { ok: false, error: err.message };
   }
+
+  // ── Alternative Payments ──────────────────────────────────────────────────
+  try {
+    const token      = await getAPToken();
+    results.ap       = {
+      ok: true,
+      message: 'Alternative Payments OAuth token exchange succeeded.',
+      tokenPreview: `${token.slice(0, 8)}…${token.slice(-4)}`,
+    };
+  } catch (err) {
+    results.ap = { ok: false, error: err.message };
+  }
+
+  const allOk = results.ghl.ok && results.ap.ok;
+  res.status(allOk ? 200 : 502).json({ ok: allOk, results });
 });
 
 /**
  * GET /api/keys/config
  *
- * Return masked configuration so operators can verify what credentials and
- * endpoints are in use without exposing secrets.
+ * Return masked configuration for both systems.
  */
 router.get('/config', (req, res) => {
-  const mode = authMode();
-
+  const mode = ghlAuthMode();
   res.json({
     ok: true,
-    authMode: mode,
-    config: {
+    ghl: {
+      authMode: mode,
       ...(mode === 'pit'
         ? { apiKey: maskSecret(config.ghl.apiKey) }
-        : {
-            clientId: maskSecret(config.ghl.clientId),
-            tokenUrl: config.ghl.tokenUrl,
-          }),
+        : { clientId: maskSecret(config.ghl.clientId) }),
       apiBaseUrl: config.ghl.apiBaseUrl,
       locationId: config.ghl.locationId ?? '(not set)',
+    },
+    alternativePayments: {
+      apiKey: maskSecret(config.ap.apiKey),
+      tokenUrl: config.ap.tokenUrl,
+      apiBaseUrl: config.ap.apiBaseUrl,
+    },
+    payment: {
       presetAmount: config.payment.presetAmount,
       presetAmountFormatted: formatCents(config.payment.presetAmount, config.payment.currency),
       currency: config.payment.currency,
@@ -69,11 +76,9 @@ router.get('/config', (req, res) => {
   });
 });
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function maskSecret(secret) {
-  if (!secret || secret.length < 8) return '***';
-  return `${secret.slice(0, 4)}${'*'.repeat(secret.length - 8)}${secret.slice(-4)}`;
+function maskSecret(s) {
+  if (!s || s.length < 8) return '***';
+  return `${s.slice(0, 4)}${'*'.repeat(s.length - 8)}${s.slice(-4)}`;
 }
 
 function formatCents(cents, currency) {

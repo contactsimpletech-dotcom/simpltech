@@ -5,72 +5,76 @@ require('dotenv').config();
 /**
  * Centralised configuration.
  *
- * GoHighLevel supports two authentication modes:
+ * ─── GoHighLevel (CRM contacts) ───────────────────────────────────────────────
+ * Two auth modes:
+ *   1. PIT — set GHL_API_KEY to a `pit-…` token from
+ *      Settings → Integrations → Private Integrations.
+ *      Used directly as a Bearer token (no exchange needed).
+ *   2. OAuth client_credentials — set GHL_CLIENT_ID + GHL_CLIENT_SECRET.
+ *      GHL_API_KEY takes precedence when both are present.
  *
- *   1. Private Integration Token (PIT)  ← recommended for simple integrations
- *      Set GHL_API_KEY to a `pit-…` token obtained from
- *      Settings → Integrations → Private Integrations in your GHL sub-account.
- *      The token is used directly as a Bearer header — no OAuth exchange needed.
- *
- *   2. OAuth 2.0 client_credentials (app-level / agency installs)
- *      Set GHL_CLIENT_ID + GHL_CLIENT_SECRET from the Marketplace app settings.
- *      The auth service will exchange them for a short-lived access token.
- *
- * GHL_API_KEY takes precedence when both are provided.
+ * ─── Alternative Payments ─────────────────────────────────────────────────────
+ * Separate system at https://public-api.alternativepayments.io
+ * Auth: OAuth 2.0 client_credentials with Basic Auth header.
+ *   AP_API_KEY     — API key from Partner Dashboard → Team Preferences → API Keys
+ *   AP_CLIENT_SECRET — client secret (leave blank if none was issued)
  */
 const config = {
+  // ── GoHighLevel CRM ──────────────────────────────────────────────────────────
   ghl: {
-    // PIT — used directly as a bearer token when present.
-    apiKey: process.env.GHL_API_KEY,
-
-    // OAuth client-credentials (fallback when no PIT is set).
+    apiKey: process.env.GHL_API_KEY,          // PIT, used as Bearer directly
     clientId: process.env.GHL_CLIENT_ID,
     clientSecret: process.env.GHL_CLIENT_SECRET,
     tokenUrl: process.env.GHL_TOKEN_URL || 'https://services.leadconnectorhq.com/oauth/token',
-
     apiBaseUrl: process.env.GHL_API_BASE_URL || 'https://services.leadconnectorhq.com',
-
-    // Required when creating contacts via the GHL Contacts API.
     locationId: process.env.GHL_LOCATION_ID,
   },
+
+  // ── Alternative Payments ──────────────────────────────────────────────────────
+  ap: {
+    apiKey: process.env.AP_API_KEY,                    // client_id for Basic Auth
+    clientSecret: process.env.AP_CLIENT_SECRET || '',  // client_secret (may be empty)
+    tokenUrl:
+      process.env.AP_TOKEN_URL ||
+      'https://public-api.alternativepayments.io/oauth/token',
+    apiBaseUrl:
+      process.env.AP_BASE_URL ||
+      'https://public-api.alternativepayments.io',
+  },
+
   server: {
     port: parseInt(process.env.PORT || '3000', 10),
   },
+
   payment: {
     presetAmount: parseInt(process.env.PRESET_AMOUNT || '5000', 10), // cents
     currency: process.env.PRESET_CURRENCY || 'USD',
   },
 };
 
-/**
- * Detect which auth mode is active.
- * @returns {'pit' | 'oauth'}
- */
-function authMode() {
+/** @returns {'pit' | 'oauth'} */
+function ghlAuthMode() {
   return config.ghl.apiKey ? 'pit' : 'oauth';
 }
 
-/**
- * Validate that required credentials are present for whichever auth mode is
- * configured.  Called at startup so the server fails fast.
- */
 function validateConfig() {
   const missing = [];
 
-  if (config.ghl.apiKey) {
-    // PIT mode — nothing else required for auth.
-  } else {
-    if (!config.ghl.clientId) missing.push('GHL_CLIENT_ID');
+  // GHL auth
+  if (!config.ghl.apiKey) {
+    if (!config.ghl.clientId)     missing.push('GHL_CLIENT_ID');
     if (!config.ghl.clientSecret) missing.push('GHL_CLIENT_SECRET');
   }
+
+  // Alternative Payments auth
+  if (!config.ap.apiKey) missing.push('AP_API_KEY');
 
   if (missing.length) {
     throw new Error(
       `Missing required environment variables: ${missing.join(', ')}.\n` +
-      'Set GHL_API_KEY (Private Integration Token) OR both GHL_CLIENT_ID and\n' +
-      'GHL_CLIENT_SECRET. Copy .env.example to .env to get started.',
+      'Copy .env.example to .env and fill in your credentials.',
     );
   }
 }
 
-module.exports = { config, authMode, validateConfig };
+module.exports = { config, ghlAuthMode, validateConfig };
