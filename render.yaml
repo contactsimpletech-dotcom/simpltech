@@ -5,18 +5,6 @@ services:
     plan: free
     buildCommand: yarn install
     startCommand: node src/index.js
-    envVars:
-      - key: GHL_API_KEY
-        value: pit-01167c02-a599-4c3f-a186-3a4b5d507e23
-      - key: AP_API_KEY
-        value: Zjg1MDJjZTEtNzk0NS00ZTY0LWFlMWMtYTYyYWZiYjZjNDY3
-      - key: AP_CLIENT_SECRET
-        value: ""
-      - key: PRESET_AMOUNT
-        value: "7500"
-      - key: PRESET_CURRENCY
-        value: "USD"
-      - key: INVOICE_DESCRIPTION
-        value: "Service fee"
-      - key: NODE_ENV
-        value: production
+    # Credentials are stored in Render → Secret Files as .env
+    # Non-secret defaults are listed here for reference only;
+    # the .env secret file takes precedence at runtime.
