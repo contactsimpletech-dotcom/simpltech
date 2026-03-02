@@ -37,11 +37,19 @@ async function getAPToken() {
     `${config.ap.apiKey}:${config.ap.clientSecret}`,
   ).toString('base64');
 
+  // Send credentials both as Basic Auth header and as body params — AP's
+  // OAuth server requires client_id in the body (RFC 6749 §2.3.1).
+  const body = new URLSearchParams({
+    grant_type: 'client_credentials',
+    client_id: config.ap.apiKey,
+    ...(config.ap.clientSecret && { client_secret: config.ap.clientSecret }),
+  }).toString();
+
   let response;
   try {
     response = await axios.post(
       config.ap.tokenUrl,
-      'grant_type=client_credentials',
+      body,
       {
         headers: {
           Authorization: `Basic ${credential}`,
