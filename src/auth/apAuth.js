@@ -28,9 +28,16 @@ async function getAPToken() {
     return tokenCache.accessToken;
   }
 
-  const clientId     = config.ap.apiKey;               // as shown in AP dashboard
-  const clientSecret = config.ap.clientSecret || '';   // empty when not issued
-  const credential   = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+  const clientId     = config.ap.apiKey;
+  const clientSecret = config.ap.clientSecret || '';
+
+  if (!clientId) {
+    throw new Error(
+      'AP_API_KEY is not set. Add it in Render → Environment variables.',
+    );
+  }
+
+  const credential = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
 
   let response;
   try {
