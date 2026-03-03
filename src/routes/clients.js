@@ -2,6 +2,7 @@
 
 const { Router } = require('express');
 const { createClientWithInvoice } = require('../services/alternativePayments');
+const { upsertContact }           = require('../services/ghlContacts');
 const { config }                   = require('../config');
 
 const router = Router();
@@ -77,6 +78,14 @@ async function handleClientInvoice(req, res) {
       invoiceId: invoice?.id,
     });
   }
+
+  // Fire-and-forget: push contact to GHL — never blocks or fails the payment.
+  upsertContact({
+    firstName,
+    lastName,
+    email,
+    phone: req.body.phone ?? undefined,
+  }).catch(() => {}); // errors already logged inside upsertContact
 
   return res.status(201).json({
     ok: true,
