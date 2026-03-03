@@ -242,8 +242,7 @@ async function getCheckoutToken(data) {
  */
 async function createClientWithInvoice(opts) {
   const fullName = [opts.first_name, opts.last_name].filter(Boolean).join(' ');
-  const amount   = opts.amount   ?? config.payment.presetAmount;
-  const currency = opts.currency ?? config.payment.currency;
+  const amount   = opts.amount ?? config.payment.presetAmount;
 
   // ── 1. Create customer ──────────────────────────────────────────────────────
   const customer = await createCustomer({
@@ -260,7 +259,6 @@ async function createClientWithInvoice(opts) {
 
   const invoice = await createInvoice({
     customer_id: customer.id,
-    currency,
     due_date,
     line_items: [
       {
