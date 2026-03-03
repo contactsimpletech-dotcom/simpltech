@@ -646,7 +646,7 @@
     </button>
 
     <p style="margin-top:14px; font-size:0.78rem; color:#9ca3af; text-align:center;">
-      After submitting, you will be redirected to Splashtop. Please follow the prompts to allow remote access.
+      After submitting, you will be redirected to our payment processor to complete payment.
     </p>
 
   </div><!-- /#formBody -->
@@ -654,7 +654,7 @@
   <!-- ── Success state ───────────────────────────────────────────────── -->
   <div class="redirect-msg" id="redirectMsg">
     <h2>Agreement Submitted</h2>
-    <p>Redirecting you to Splashtop for remote access&hellip;</p>
+    <p>Redirecting you to payment&hellip;</p>
   </div>
 </div>
 
@@ -807,12 +807,12 @@
         throw new Error(data.error || 'Submission failed. Please try again.');
       }
 
-      // Success — show redirect message and go to Splashtop
+      // Success — show redirect message then go to AP payment page
       document.getElementById('formBody').style.display    = 'none';
       document.getElementById('redirectMsg').style.display = 'block';
 
       setTimeout(() => {
-        window.location.href = 'https://sos.splashtop.com';
+        window.location.href = data.paymentUrl;
       }, 1800);
 
     } catch (err) {

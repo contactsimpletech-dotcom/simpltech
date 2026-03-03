@@ -1,16 +1,21 @@
 'use strict';
 
 const { Router } = require('express');
-const { upsertContact, addContactNote } = require('../services/ghlContacts');
+const { upsertContact, addContactNote }          = require('../services/ghlContacts');
+const { createCustomer, createInvoice,
+        getInvoicePaymentLink }                   = require('../services/alternativePayments');
+const { config }                                  = require('../config');
 
 const router = Router();
 
 /**
  * POST /api/agreement
  *
- * Receives the IT Support Authorization & Payment Agreement form submission.
- * Validates required fields, upserts the contact in GHL, and attaches a note
- * with the agreement details.
+ * 1. Validate required fields, checkboxes, and signature.
+ * 2. Upsert contact in GHL + attach a note with agreement details.
+ * 3. Create an AP customer + invoice.
+ * 4. Fetch the hosted AP payment link.
+ * 5. Return { ok: true, paymentUrl } — browser redirects physically to AP.
  *
  * Body (JSON):
  *   first_name          — required
@@ -22,9 +27,6 @@ const router = Router();
  *   agree_no_guarantee  — boolean, required (section 10)
  *   agree_payment       — boolean, required (section 14)
  *   signature_data      — base64 PNG data URL, required
- *
- * Success: 200 { ok: true }
- * Error:   400 { ok: false, error }
  */
 router.post('/', async (req, res) => {
   const {
@@ -42,7 +44,7 @@ router.post('/', async (req, res) => {
   if (!first_name || !phone || !email || !today_date) {
     return res.status(400).json({
       ok: false,
-      error: 'First name, phone, email, and today\'s date are required.',
+      error: "First name, phone, email, and today's date are required.",
     });
   }
 
@@ -67,7 +69,7 @@ router.post('/', async (req, res) => {
     });
   }
 
-  // Upsert contact — fire-and-forget on error so submission always succeeds
+  // ── 1. GHL: upsert contact ─────────────────────────────────────────────────
   const contact = await upsertContact({
     firstName: first_name,
     lastName:  last_name || undefined,
@@ -75,6 +77,7 @@ router.post('/', async (req, res) => {
     phone,
   }).catch(() => null);
 
+  // ── 2. GHL: attach agreement note ─────────────────────────────────────────
   if (contact?.id) {
     const noteLines = [
       'IT Support Authorization & Payment Agreement',
@@ -92,11 +95,54 @@ router.post('/', async (req, res) => {
       `Client IP         : ${req.ip}`,
       `Timestamp (UTC)   : ${new Date().toISOString()}`,
     ];
-
     addContactNote(contact.id, noteLines.join('\n')).catch(() => {});
   }
 
-  return res.json({ ok: true });
+  // ── 3. AP: create customer ─────────────────────────────────────────────────
+  let customer;
+  try {
+    const fullName = [first_name, last_name].filter(Boolean).join(' ');
+    customer = await createCustomer({
+      name:  fullName,
+      email,
+      ...(contact?.id && { external_id: contact.id }),
+    });
+  } catch (err) {
+    return res.status(502).json({ ok: false, error: `Payment setup failed: ${err.message}` });
+  }
+
+  // ── 4. AP: create invoice ──────────────────────────────────────────────────
+  let invoice;
+  try {
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + 30);
+    invoice = await createInvoice({
+      customer_id: customer.id,
+      due_date:    dueDate.toISOString().split('T')[0],
+      line_items:  [{
+        description: config.payment.invoiceDescription,
+        amount:      config.payment.presetAmount,
+        quantity:    1,
+      }],
+    });
+  } catch (err) {
+    return res.status(502).json({ ok: false, error: `Invoice creation failed: ${err.message}` });
+  }
+
+  // ── 5. AP: get hosted payment link ─────────────────────────────────────────
+  let paymentUrl;
+  try {
+    const linkData = await getInvoicePaymentLink(invoice.id);
+    paymentUrl = linkData?.url ?? linkData?.payment_link ?? linkData?.link ?? null;
+  } catch (err) {
+    return res.status(502).json({ ok: false, error: `Could not retrieve payment link: ${err.message}` });
+  }
+
+  if (!paymentUrl) {
+    return res.status(502).json({ ok: false, error: 'Alternative Payments did not return a payment URL.' });
+  }
+
+  return res.json({ ok: true, paymentUrl });
 });
 
 module.exports = router;
