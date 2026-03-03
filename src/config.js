@@ -40,6 +40,8 @@ const config = {
     apiBaseUrl:
       process.env.AP_BASE_URL ||
       'https://public-api.alternativepayments.io',
+    environment:
+      process.env.AP_ENVIRONMENT || 'production',      // 'production' | 'staging'
   },
 
   // ── QuickBooks Online ──────────────────────────────────────────────────────────

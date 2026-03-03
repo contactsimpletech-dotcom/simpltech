@@ -234,12 +234,12 @@
           throw new Error(data.error || 'Failed to create payment.');
         }
 
-        const { invoiceId, checkoutToken } = data;
+        const { invoiceId, checkoutToken, environment } = data;
 
         // ── Initialise AP SDK ──────────────────────────────────────
         const client = await AlternativeClient.create({
           accessToken: checkoutToken,
-          environment: 'production',
+          environment: environment || 'production',
           onAccessTokenExpired: async () => {
             const r = await fetch('/api/clients', {
               method: 'POST',

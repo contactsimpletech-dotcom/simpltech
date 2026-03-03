@@ -83,6 +83,7 @@ async function handleClientInvoice(req, res) {
     invoiceId:     invoice.id,
     customerId:    customer.id,
     checkoutToken,
+    environment:   config.ap.environment,
   });
 }
 
