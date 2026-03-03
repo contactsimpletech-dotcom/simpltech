@@ -13,7 +13,7 @@ function ghlClient() {
 }
 
 /**
- * Normalize a phone number to E.164-ish format for searching.
+ * Normalize a phone number to E.164 format for searching.
  * Strips all non-digit characters then prepends '+'.
  */
 function normalizePhone(phone) {
@@ -39,7 +39,7 @@ async function findContactByPhone(phone) {
 
     const contacts = res.data?.contacts || [];
     if (contacts.length > 0) {
-      console.log(`[ghl] Found contact for ${normalized}: ${contacts[0].id}`);
+      console.log(`[ghl] Found existing contact for ${normalized}: ${contacts[0].id}`);
       return contacts[0];
     }
   } catch (err) {
@@ -50,9 +50,10 @@ async function findContactByPhone(phone) {
 }
 
 /**
- * Create a new GHL contact with just a phone number (and optional name).
+ * Create a new GHL contact with a phone number and name.
+ * Falls back to "Unknown Caller" if no name was extracted from the transcript.
  */
-async function createContact(phone, firstName = '', lastName = '') {
+async function createContact(phone, firstName, lastName) {
   const client = ghlClient();
   const normalized = normalizePhone(phone);
 
@@ -64,38 +65,20 @@ async function createContact(phone, firstName = '', lastName = '') {
   });
 
   const contact = res.data?.contact;
-  console.log(`[ghl] Created contact ${contact.id} for ${normalized}`);
+  console.log(`[ghl] Created contact ${contact.id} (${firstName} ${lastName}) for ${normalized}`);
   return contact;
 }
 
 /**
- * Find an existing contact by phone or create one if not found.
- */
-async function findOrCreateContact(phone) {
-  const existing = await findContactByPhone(phone);
-  if (existing) return existing;
-
-  console.log(`[ghl] No contact found for ${phone}, creating one...`);
-  return createContact(phone);
-}
-
-/**
  * Add a note to a GHL contact.
- *
- * @param {string} contactId
- * @param {string} body       - Note text
- * @param {string} [userId]   - Optional GHL user ID to attribute the note to
  */
-async function addNote(contactId, body, userId) {
+async function addNote(contactId, body) {
   const client = ghlClient();
 
-  const payload = { body };
-  if (userId) payload.userId = userId;
-
-  const res = await client.post(`/contacts/${contactId}/notes`, payload);
+  const res = await client.post(`/contacts/${contactId}/notes`, { body });
   const note = res.data?.note;
   console.log(`[ghl] Note added to contact ${contactId}: note ID ${note?.id}`);
   return note;
 }
 
-module.exports = { findOrCreateContact, addNote };
+module.exports = { findContactByPhone, createContact, addNote };
