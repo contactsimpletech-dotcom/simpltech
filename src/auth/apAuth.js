@@ -32,16 +32,16 @@ async function getAPToken() {
     return tokenCache.accessToken;
   }
 
-  // Build Basic Auth credential: base64(apiKey:clientSecret).
-  // When no client_secret is issued, AP uses the API key as both
-  // client_id and client_secret: base64(apiKey:apiKey).
-  const secret     = config.ap.clientSecret || config.ap.apiKey;
-  const credential = Buffer.from(`${config.ap.apiKey}:${secret}`).toString('base64');
+  // The AP dashboard displays the API key as a base64-encoded UUID.
+  // Decode it to get the actual client_id expected by the OAuth server.
+  const clientId   = Buffer.from(config.ap.apiKey, 'base64').toString('utf8');
+  const secret     = config.ap.clientSecret || clientId;
+  const credential = Buffer.from(`${clientId}:${secret}`).toString('base64');
 
   // Also send credentials in the request body (RFC 6749 §2.3.1).
   const body = new URLSearchParams({
     grant_type: 'client_credentials',
-    client_id: config.ap.apiKey,
+    client_id: clientId,
     client_secret: secret,
   }).toString();
 
