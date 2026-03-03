@@ -9,42 +9,27 @@ const router = Router();
 /**
  * POST /api/clients
  *
- * Called when a client submits the intake form.
+ * Called when the intake form submits. Creates an AP customer + invoice,
+ * gets a short-lived checkout token, and returns JSON for the frontend
+ * AP JS SDK to render the embedded payment flow.
  *
- * What happens:
- *   1. Creates an Alternative Payments customer + invoice.
- *   2. Redirects the client's browser to the AP hosted payment page (302).
- *      If called from a server / API client (not a browser form), pass
- *      ?redirect=false to receive JSON instead.
- *
- * Form field names (GHL form builder query keys):
+ * Form fields:
  *   first_name   — required
  *   last_name    — optional
  *   email        — required
  *   phone        — optional
  *
  * Optional overrides:
- *   amount           — invoice total in cents (default: PRESET_AMOUNT = 7500)
- *   currency         — ISO 4217 (default: PRESET_CURRENCY = USD)
- *   line_description — line-item label on the invoice (default: INVOICE_DESCRIPTION)
- *   due_days         — days until invoice due date (default: 30)
+ *   amount           — cents (default: PRESET_AMOUNT)
+ *   currency         — ISO 4217 (default: PRESET_CURRENCY)
+ *   line_description — invoice line label (default: INVOICE_DESCRIPTION)
+ *   due_days         — days until due (default: 30)
  *
- * Success responses:
- *   302  Location: https://…alternativepayments.io/…  (default)
- *   201  JSON { ok, customer, invoice, checkoutUrl }  (?redirect=false)
- *
- * Error response:
- *   502  JSON { ok: false, error: "…" }
+ * Success: 201 { ok, invoiceId, customerId, checkoutToken }
+ * Error:   400 / 502 { ok: false, error }
  */
 
-/**
- * GET /api/clients?first_name=…&email=…
- *
- * Same as POST but reads fields from query string.
- * Used when GHL redirects here after form submission using merge tags:
- *   ?first_name={{contact.first_name}}&last_name={{contact.last_name}}
- *   &email={{contact.email}}&phone={{contact.phone}}
- */
+// GET /api/clients?first_name=…&email=… — GHL merge-tag redirect support
 router.get('/', (req, res, next) => {
   req.body = req.query;
   next();
@@ -58,8 +43,6 @@ async function handleClientInvoice(req, res) {
   const lineDesc      = req.body.line_description ?? req.body.lineDescription;
   const { email, amount, currency, due_days } = req.body;
 
-  const doRedirect = req.query.redirect !== 'false';
-
   if (!firstName || !email) {
     return res.status(400).json({
       ok: false,
@@ -72,10 +55,9 @@ async function handleClientInvoice(req, res) {
   const dueDays       = due_days ? parseInt(due_days, 10) : 30;
   const lineDescFinal = lineDesc ?? config.payment.invoiceDescription;
 
-  // ── Create Alternative Payments customer + invoice ───────────────────────────
-  let customer, invoice, checkoutUrl;
+  let customer, invoice, checkoutToken;
   try {
-    ({ customer, invoice, checkoutUrl } = await createClientWithInvoice({
+    ({ customer, invoice, checkoutToken } = await createClientWithInvoice({
       first_name:       firstName,
       last_name:        lastName,
       email,
@@ -88,25 +70,19 @@ async function handleClientInvoice(req, res) {
     return res.status(502).json({ ok: false, error: err.message });
   }
 
-  if (!checkoutUrl) {
+  if (!checkoutToken) {
     return res.status(502).json({
       ok: false,
-      error: 'Alternative Payments did not return a payment link. The invoice was created but no checkout URL was provided.',
-      invoice,
+      error: 'Alternative Payments did not return a checkout token.',
+      invoiceId: invoice?.id,
     });
   }
 
-  // ── Redirect the browser to the AP hosted payment page ──────────────────────
-  if (doRedirect) {
-    return res.redirect(302, checkoutUrl);
-  }
-
-  // ── JSON response (API / server-side callers) ────────────────────────────────
   return res.status(201).json({
     ok: true,
-    customer,
-    invoice,
-    checkoutUrl,
+    invoiceId:     invoice.id,
+    customerId:    customer.id,
+    checkoutToken,
   });
 }
 

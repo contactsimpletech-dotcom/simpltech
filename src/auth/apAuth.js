@@ -12,11 +12,12 @@ const tokenCache = {
 };
 
 /**
- * Exchange the AP API key for a bearer access token using OAuth 2.0
- * client_credentials.
+ * Exchange AP credentials for an OAuth bearer access token.
  *
- * The API key is the client_id. There is no client_secret — Basic Auth
- * is built as base64(clientId:) with an empty password.
+ * Per AP docs:
+ *   Authorization: Basic base64(clientId:clientSecret)
+ *   Content-Type:  application/x-www-form-urlencoded
+ *   Body:          grant_type=client_credentials   ← only this, nothing else
  *
  * @returns {Promise<string>} A valid bearer access token.
  */
@@ -27,21 +28,15 @@ async function getAPToken() {
     return tokenCache.accessToken;
   }
 
-  // Decode the base64 key from the dashboard to get the raw UUID client_id.
-  const clientId   = Buffer.from(config.ap.apiKey, 'base64').toString('utf8');
-  // No client_secret — Basic Auth uses empty password: base64(clientId:)
-  const credential = Buffer.from(`${clientId}:`).toString('base64');
-
-  const body = new URLSearchParams({
-    grant_type: 'client_credentials',
-    client_id: clientId,
-  }).toString();
+  const clientId     = config.ap.apiKey;               // as shown in AP dashboard
+  const clientSecret = config.ap.clientSecret || '';   // empty when not issued
+  const credential   = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
 
   let response;
   try {
     response = await axios.post(
       config.ap.tokenUrl,
-      body,
+      'grant_type=client_credentials',               // body: only this field
       {
         headers: {
           Authorization: `Basic ${credential}`,

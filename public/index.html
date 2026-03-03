@@ -59,9 +59,7 @@
       margin-bottom: 28px;
     }
 
-    .field {
-      margin-bottom: 18px;
-    }
+    .field { margin-bottom: 18px; }
 
     label {
       display: block;
@@ -71,10 +69,7 @@
       margin-bottom: 6px;
     }
 
-    label .req {
-      color: #ef4444;
-      margin-left: 2px;
-    }
+    label .req { color: #ef4444; margin-left: 2px; }
 
     input {
       width: 100%;
@@ -112,7 +107,6 @@
       cursor: pointer;
       margin-top: 8px;
       transition: background 0.15s, transform 0.1s;
-      letter-spacing: 0.01em;
     }
 
     .submit-btn:hover  { background: #0046cc; }
@@ -122,13 +116,6 @@
       background: #9ca3af;
       cursor: not-allowed;
       transform: none;
-    }
-
-    .note {
-      font-size: 0.78rem;
-      color: #9ca3af;
-      text-align: center;
-      margin-top: 16px;
     }
 
     .error-msg {
@@ -141,6 +128,13 @@
       font-size: 0.85rem;
       margin-bottom: 16px;
     }
+
+    #payment-section { display: none; }
+
+    #payment-container {
+      min-height: 300px;
+      margin-top: 8px;
+    }
   </style>
 </head>
 <body>
@@ -148,65 +142,148 @@
     <div class="logo">SimplTech</div>
     <div class="subtitle">IT Support Services</div>
 
-    <h2>Complete Your Payment</h2>
-    <div class="amount-badge">$75.00 — One-time service fee</div>
+    <!-- ── Step 1: Intake form ─────────────────────────────────── -->
+    <div id="intake-section">
+      <h2>Complete Your Payment</h2>
+      <div class="amount-badge">$75.00 — One-time service fee</div>
 
-    <div class="error-msg" id="errorMsg"></div>
+      <div class="error-msg" id="errorMsg"></div>
 
-    <form id="payForm" action="/api/clients" method="POST" novalidate>
-      <div class="row">
-        <div class="field">
-          <label for="first_name">First name <span class="req">*</span></label>
-          <input type="text" id="first_name" name="first_name"
-                 placeholder="Jane" autocomplete="given-name" required />
+      <form id="payForm" novalidate>
+        <div class="row">
+          <div class="field">
+            <label for="first_name">First name <span class="req">*</span></label>
+            <input type="text" id="first_name" name="first_name"
+                   placeholder="Jane" autocomplete="given-name" required />
+          </div>
+          <div class="field">
+            <label for="last_name">Last name</label>
+            <input type="text" id="last_name" name="last_name"
+                   placeholder="Smith" autocomplete="family-name" />
+          </div>
         </div>
+
         <div class="field">
-          <label for="last_name">Last name</label>
-          <input type="text" id="last_name" name="last_name"
-                 placeholder="Smith" autocomplete="family-name" />
+          <label for="email">Email address <span class="req">*</span></label>
+          <input type="email" id="email" name="email"
+                 placeholder="jane@example.com" autocomplete="email" required />
         </div>
-      </div>
 
-      <div class="field">
-        <label for="email">Email address <span class="req">*</span></label>
-        <input type="email" id="email" name="email"
-               placeholder="jane@example.com" autocomplete="email" required />
-      </div>
+        <div class="field">
+          <label for="phone">Phone number</label>
+          <input type="tel" id="phone" name="phone"
+                 placeholder="+1 (555) 000-0000" autocomplete="tel" />
+        </div>
 
-      <div class="field">
-        <label for="phone">Phone number</label>
-        <input type="tel" id="phone" name="phone"
-               placeholder="+1 (555) 000-0000" autocomplete="tel" />
-      </div>
+        <button type="submit" class="submit-btn" id="submitBtn">
+          Proceed to Payment →
+        </button>
+      </form>
+    </div>
 
-      <button type="submit" class="submit-btn" id="submitBtn">
-        Proceed to Payment →
-      </button>
-    </form>
-
-    <p class="note">You will be redirected to a secure checkout page to complete payment.</p>
+    <!-- ── Step 2: Embedded payment flow ──────────────────────── -->
+    <div id="payment-section">
+      <h2>Enter Payment Details</h2>
+      <div id="payment-container"></div>
+    </div>
   </div>
 
-  <script>
-    const form     = document.getElementById('payForm');
-    const btn      = document.getElementById('submitBtn');
-    const errorMsg = document.getElementById('errorMsg');
+  <script type="module">
+    import { AlternativeClient } from 'https://cdn.jsdelivr.net/npm/@getalternative/partner-sdk@0.1.7/dist/index.mjs';
 
-    form.addEventListener('submit', function (e) {
+    const form         = document.getElementById('payForm');
+    const submitBtn    = document.getElementById('submitBtn');
+    const errorMsg     = document.getElementById('errorMsg');
+    const intakeSection  = document.getElementById('intake-section');
+    const paymentSection = document.getElementById('payment-section');
+
+    let apFlow = null;
+
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
       errorMsg.style.display = 'none';
 
-      const first = document.getElementById('first_name').value.trim();
-      const email = document.getElementById('email').value.trim();
+      const firstName = document.getElementById('first_name').value.trim();
+      const email     = document.getElementById('email').value.trim();
 
-      if (!first || !email) {
-        e.preventDefault();
+      if (!firstName || !email) {
         errorMsg.textContent = 'First name and email are required.';
         errorMsg.style.display = 'block';
         return;
       }
 
-      btn.disabled    = true;
-      btn.textContent = 'Redirecting…';
+      submitBtn.disabled    = true;
+      submitBtn.textContent = 'Setting up payment…';
+
+      try {
+        // ── Create customer + invoice, get checkout token ──────────
+        const resp = await fetch('/api/clients', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            first_name: firstName,
+            last_name:  document.getElementById('last_name').value.trim(),
+            email,
+            phone:      document.getElementById('phone').value.trim(),
+          }),
+        });
+
+        const data = await resp.json();
+
+        if (!data.ok) {
+          throw new Error(data.error || 'Failed to create payment.');
+        }
+
+        const { invoiceId, checkoutToken } = data;
+
+        // ── Initialise AP SDK ──────────────────────────────────────
+        const client = await AlternativeClient.create({
+          accessToken: checkoutToken,
+          environment: 'production',
+          onAccessTokenExpired: async () => {
+            const r = await fetch('/api/clients', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ first_name: firstName, email }),
+            });
+            const d = await r.json();
+            return d.checkoutToken;
+          },
+        });
+
+        // ── Show payment flow ──────────────────────────────────────
+        intakeSection.style.display  = 'none';
+        paymentSection.style.display = 'block';
+
+        apFlow = client.createPaymentFlow({
+          containerId: 'payment-container',
+          invoiceId,
+          onPaymentSuccess: (payment) => {
+            paymentSection.innerHTML =
+              '<h2 style="color:#16a34a;margin-bottom:8px">Payment successful!</h2>' +
+              '<p style="color:#6b7280;font-size:0.9rem">Thank you. A confirmation will be sent to your email.</p>';
+          },
+          onPaymentError: (error) => {
+            paymentSection.innerHTML = '';
+            errorMsg.textContent = error.message || 'Payment failed. Please try again.';
+            errorMsg.style.display = 'block';
+            intakeSection.style.display  = 'block';
+            paymentSection.style.display = 'none';
+            submitBtn.disabled    = false;
+            submitBtn.textContent = 'Proceed to Payment →';
+          },
+        });
+
+      } catch (err) {
+        errorMsg.textContent = err.message || 'Something went wrong. Please try again.';
+        errorMsg.style.display  = 'block';
+        submitBtn.disabled      = false;
+        submitBtn.textContent   = 'Proceed to Payment →';
+      }
+    });
+
+    window.addEventListener('beforeunload', () => {
+      if (apFlow) apFlow.unmount();
     });
   </script>
 </body>

@@ -198,6 +198,24 @@ async function getPayoutTransactions(id) {
   return withAuth((c) => c.get(`/payouts/${id}/transactions`));
 }
 
+// ─── Checkout Auth ────────────────────────────────────────────────────────────
+
+/**
+ * Exchange an AP OAuth token for a short-lived frontend checkout token.
+ * The checkout token is passed to the AP JavaScript SDK in the browser.
+ *
+ * AP API: POST /v1/checkout-auth/init
+ *
+ * @param {{ customer_id: string, invoice_id: string }} data
+ * @returns {Promise<{ token: string, expires_at: string }>}
+ */
+async function getCheckoutToken(data) {
+  return withAuth((c) => c.post('/v1/checkout-auth/init', {
+    customer_id: data.customer_id,
+    invoice_id:  data.invoice_id,
+  }));
+}
+
 // ─── High-level helpers ───────────────────────────────────────────────────────
 
 /**
@@ -253,11 +271,11 @@ async function createClientWithInvoice(opts) {
     ],
   });
 
-  // ── 3. Fetch hosted payment link ────────────────────────────────────────────
-  const linkData   = await getInvoicePaymentLink(invoice.id);
-  const checkoutUrl = linkData.url ?? null;
+  // ── 3. Get frontend checkout token for the AP JS SDK ────────────────────────
+  const tokenData   = await getCheckoutToken({ customer_id: customer.id, invoice_id: invoice.id });
+  const checkoutToken = tokenData.token ?? null;
 
-  return { customer, invoice, checkoutUrl };
+  return { customer, invoice, checkoutToken };
 }
 
 /**
@@ -299,6 +317,8 @@ module.exports = {
   createInvoice,
   getInvoicePaymentLink,
   getInvoicePdfLink,
+  // Checkout Auth
+  getCheckoutToken,
   // Transactions
   listTransactions,
   // Payouts
