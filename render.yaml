@@ -2,6 +2,7 @@ services:
   - type: web
     name: simpltech-ghl-payments
     env: node
+    repo: https://github.com/contactsimpletech-dotcom/GHL-RingCentral
     plan: starter
     buildCommand: yarn install
     startCommand: node src/index.js
