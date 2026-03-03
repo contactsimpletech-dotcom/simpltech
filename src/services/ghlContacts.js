@@ -57,4 +57,32 @@ async function upsertContact({ firstName, lastName, email, phone }) {
   return response.data?.contact ?? response.data ?? null;
 }
 
-module.exports = { upsertContact };
+/**
+ * Add a note to a GHL contact.
+ *
+ * @param {string} contactId  GHL contact ID returned by upsertContact
+ * @param {string} body       Plain-text note content
+ * @returns {Promise<object|null>}
+ */
+async function addContactNote(contactId, body) {
+  if (!contactId || !body) return null;
+
+  let client;
+  try {
+    client = await getAuthenticatedClient();
+  } catch (err) {
+    console.error('[ghl] Auth error — skipping note creation:', err.message);
+    return null;
+  }
+
+  try {
+    const response = await client.post(`/contacts/${contactId}/notes`, { body });
+    return response.data ?? null;
+  } catch (err) {
+    if (err.response?.status === 401) invalidateToken();
+    console.error('[ghl] Note creation failed:', err.response?.data ?? err.message);
+    return null;
+  }
+}
+
+module.exports = { upsertContact, addContactNote };

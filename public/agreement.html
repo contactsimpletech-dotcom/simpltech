@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SimplTech — IT Support Authorization &amp; Payment Agreement</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f7fa;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 32px 16px 48px;
+      color: #1a1a2e;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 14px;
+      box-shadow: 0 4px 28px rgba(0,0,0,0.10);
+      width: 100%;
+      max-width: 720px;
+      padding: 44px 44px 52px;
+    }
+
+    @media (max-width: 600px) {
+      .card { padding: 28px 20px 36px; }
+    }
+
+    /* ── Header ──────────────────────────────── */
+    .logo {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #0057ff;
+      letter-spacing: -0.5px;
+      margin-bottom: 4px;
+    }
+
+    .page-title {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: #111827;
+      margin: 20px 0 6px;
+      line-height: 1.25;
+    }
+
+    .page-subtitle {
+      font-size: 0.88rem;
+      color: #6b7280;
+      margin-bottom: 32px;
+    }
+
+    /* ── Client info ─────────────────────────── */
+    .section-header {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #9ca3af;
+      margin-bottom: 16px;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 480px) { .row { grid-template-columns: 1fr; } }
+
+    .field { margin-bottom: 18px; }
+
+    label {
+      display: block;
+      font-size: 0.84rem;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 6px;
+    }
+
+    label .req { color: #ef4444; margin-left: 2px; }
+
+    input[type="text"],
+    input[type="email"],
+    input[type="tel"],
+    input[type="date"] {
+      width: 100%;
+      padding: 11px 14px;
+      border: 1.5px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      color: #111827;
+      background: #fafafa;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      outline: none;
+      -webkit-appearance: none;
+    }
+
+    input:focus {
+      border-color: #0057ff;
+      box-shadow: 0 0 0 3px rgba(0,87,255,0.10);
+      background: #fff;
+    }
+
+    /* ── Agreement sections ──────────────────── */
+    .divider {
+      border: none;
+      border-top: 1px solid #e5e7eb;
+      margin: 32px 0;
+    }
+
+    .section {
+      margin-bottom: 28px;
+    }
+
+    .section-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #111827;
+      margin-bottom: 10px;
+    }
+
+    .section-body {
+      font-size: 0.85rem;
+      color: #4b5563;
+      line-height: 1.65;
+    }
+
+    .section-body ul {
+      list-style: none;
+      padding: 0;
+      margin: 8px 0 4px 0;
+    }
+
+    .section-body ul li {
+      padding-left: 18px;
+      position: relative;
+      margin-bottom: 4px;
+    }
+
+    .section-body ul li::before {
+      content: '•';
+      position: absolute;
+      left: 4px;
+      color: #0057ff;
+      font-weight: 700;
+    }
+
+    .section-body p + p { margin-top: 8px; }
+
+    .notice-box {
+      background: #eff6ff;
+      border-left: 3px solid #0057ff;
+      border-radius: 0 6px 6px 0;
+      padding: 10px 14px;
+      font-size: 0.82rem;
+      color: #1e40af;
+      margin-top: 10px;
+      line-height: 1.5;
+    }
+
+    /* ── Checkbox agreement ──────────────────── */
+    .agree-box {
+      background: #f9fafb;
+      border: 1.5px solid #d1d5db;
+      border-radius: 10px;
+      padding: 16px 18px;
+      margin-top: 14px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .agree-box:hover {
+      border-color: #0057ff;
+      background: #eff6ff;
+    }
+
+    .agree-box input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      min-width: 18px;
+      accent-color: #0057ff;
+      cursor: pointer;
+      margin-top: 2px;
+    }
+
+    .agree-box-text {
+      font-size: 0.84rem;
+      color: #374151;
+      line-height: 1.5;
+      user-select: none;
+    }
+
+    .agree-box-text strong { color: #111827; }
+
+    /* ── Signature pad ───────────────────────── */
+    .sig-label {
+      font-size: 0.84rem;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 8px;
+    }
+
+    .sig-label .req { color: #ef4444; margin-left: 2px; }
+
+    .sig-wrapper {
+      border: 1.5px solid #d1d5db;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #fafafa;
+      position: relative;
+    }
+
+    .sig-wrapper canvas {
+      display: block;
+      width: 100%;
+      height: 160px;
+      cursor: crosshair;
+      touch-action: none;
+    }
+
+    .sig-hint {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      font-size: 0.82rem;
+      color: #c4c9d4;
+      font-style: italic;
+    }
+
+    .sig-toolbar {
+      display: flex;
+      justify-content: flex-end;
+      padding: 6px 10px;
+      background: #f3f4f6;
+      border-top: 1px solid #e5e7eb;
+    }
+
+    .clear-btn {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #6b7280;
+      background: none;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      padding: 4px 12px;
+      cursor: pointer;
+      transition: color 0.12s, border-color 0.12s;
+    }
+
+    .clear-btn:hover { color: #ef4444; border-color: #ef4444; }
+
+    /* ── Error / submit ──────────────────────── */
+    .error-msg {
+      display: none;
+      background: #fef2f2;
+      color: #b91c1c;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 0.85rem;
+      margin-bottom: 20px;
+    }
+
+    .submit-btn {
+      width: 100%;
+      padding: 14px;
+      background: #0057ff;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 700;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      margin-top: 28px;
+      transition: background 0.15s, transform 0.1s;
+      letter-spacing: 0.02em;
+    }
+
+    .submit-btn:hover  { background: #0046cc; }
+    .submit-btn:active { transform: scale(0.99); }
+
+    .submit-btn:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .redirect-msg {
+      display: none;
+      text-align: center;
+      padding: 32px 0;
+    }
+
+    .redirect-msg h2 {
+      font-size: 1.3rem;
+      color: #16a34a;
+      margin-bottom: 10px;
+    }
+
+    .redirect-msg p {
+      font-size: 0.9rem;
+      color: #6b7280;
+    }
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">SimplTech</div>
+
+  <h1 class="page-title">IT Support Authorization &amp; Payment Agreement</h1>
+  <p class="page-subtitle">Please read and complete all sections before signing.</p>
+
+  <div id="formBody">
+
+    <!-- ── Client Info ──────────────────────────────────────────────── -->
+    <p class="section-header">Client Information</p>
+
+    <div class="row">
+      <div class="field">
+        <label for="first_name">First Name <span class="req">*</span></label>
+        <input type="text" id="first_name" name="first_name" placeholder="Jane"
+               autocomplete="given-name" required />
+      </div>
+      <div class="field">
+        <label for="last_name">Last Name</label>
+        <input type="text" id="last_name" name="last_name" placeholder="Smith"
+               autocomplete="family-name" />
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="phone">Phone <span class="req">*</span></label>
+      <input type="tel" id="phone" name="phone" placeholder="+1 (555) 000-0000"
+             autocomplete="tel" required />
+    </div>
+
+    <div class="field">
+      <label for="email">Email <span class="req">*</span></label>
+      <input type="email" id="email" name="email" placeholder="jane@example.com"
+             autocomplete="email" required />
+    </div>
+
+    <div class="field">
+      <label for="today_date">Today's Date <span class="req">*</span></label>
+      <input type="date" id="today_date" name="today_date" required />
+    </div>
+
+    <hr class="divider" />
+
+    <!-- ── Section 1 ─────────────────────────────────────────────────── -->
+    <div class="section">
+      <p class="section-title">1. Scope of IT Services</p>
+      <div class="section-body">
+        <p>Client authorizes Provider to perform information technology services including, but not limited to:</p>
+        <ul>
+          <li>Remote or onsite troubleshooting</li>
+          <li>Hardware or software configuration</li>
+          <li>VoIP setup, repair, or configuration</li>
+          <li>Email migration, setup, or recovery</li>
+          <li>Account access and credential issues</li>
+          <li>Business software integrations</li>
+          <li>Cloud platform assistance</li>
+          <li>Device onboarding and optimization</li>
+          <li>Vendor coordination or remediation</li>
+          <li>Network support</li>
+        </ul>
+        <p style="margin-top:10px;">Client understands that services may require temporary access to accounts, platforms, or devices.</p>
+      </div>
+    </div>
+
+    <!-- ── Section 2 ─────────────────────────────────────────────────── -->
+    <div class="section">
+      <p class="section-title">2. Billing Terms</p>
+      <div class="section-body">
+        <p>Rates are based on the service level, complexity, and time required to complete the requested work.</p>
+        <p>Billing may include:</p>
+        <ul>
+          <li>Diagnostics</li>
+          <li>Troubleshooting</li>
+          <li>Configuration</li>
+          <li>Account access or recovery</li>
+          <li>Software installation or modification</li>
+          <li>Technical remediation</li>
+          <li>Remote or onsite service time</li>
+          <li>Vendor communication</li>
+          <li>Travel time (if onsite)</li>
+          <li>Waiting time caused by Client</li>
+        </ul>
+        <p style="margin-top:10px;">Billing begins when work begins, whether remote or onsite.</p>
+      </div>
+    </div>
+
+    <!-- ── Section 3 ─────────────────────────────────────────────────── -->
+    <div class="section">
+      <p class="section-title">3. Payment Terms</p>
+      <div class="section-body">
+        <p>Payment is due immediately upon completion of services, unless otherwise stated in writing.</p>
+        <p>Invoices may include:</p>
+        <ul>
+          <li>Services provided</li>
+          <li>Parts, software, or licenses purchased</li>
+          <li>Vendor or platform fees paid by Provider on Client's behalf</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ── Section 4 ─────────────────────────────────────────────────── -->
+    <div class="section">
+      <p class="section-title">4. Declined or Failed Payments</p>
+      <div class="section-body">
+        <p>If a payment fails or a card declines:</p>
+        <ul>
+          <li>Client has 72 hours to resolve the balance</li>
+          <li>After 72 hours, a $10 late fee applies every 7 days until paid in full</li>
+        </ul>
+        <p>Late fees apply to:</p>
+        <ul>
+          <li>Service charges</li>
+          <li>Parts or materials</li>
+          <li>Third-party costs paid on Client's behalf</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ── Section 5 ─────────────────────────────────────────────────── -->
+    <div class="section">
+      <p class="section-title">5. Chargebacks</p>
+      <div class="section-body">
+        <p>Client agrees not to initiate chargebacks, disputes, or reversals without first attempting to resolve the issue with Provider in writing.</p>
+        <p style="margin-top:8px;">A chargeback initiated without notice is breach of this Agreement.</p>
+      </div>
+    </div>
+
+    <!-- ── Section 6 — CHECKBOX ──────────────────────────────────────── -->
+    <div class="section">
+      <p class="section-title">6. Collections, Court Costs &amp; Attorney Fees</p>
+      <div class="section-body">
+        <p>If Client fails to pay, the Client is responsible for:</p>
+        <ul>
+          <li>The original outstanding balance, plus</li>
+          <li>All reasonable costs incurred by Provider to obtain payment</li>
+        </ul>
+        <p>These costs may include:</p>
+        <ul>
+          <li>Collection agency fees</li>
+          <li>Attorney fees</li>
+          <li>Court filing fees</li>
+          <li>Administrative recovery fees</li>
+          <li>Bank or reversal fees</li>
+        </ul>
+        <p style="margin-top:8px;">Failure to pay does not eliminate or reduce the original invoice amount.</p>
+      </div>
+
+      <label class="agree-box" for="agree_collections">
+        <input type="checkbox" id="agree_collections" name="agree_collections" />
+        <span class="agree-box-text">
+          <strong>I understand and agree</strong> — if I fail to pay, I am responsible for the original balance plus all collection, attorney, and court costs incurred by Provider.
+        </span>
+      </label>
+    </div>
+
+    <!-- ── Section 7 ─────────────────────────────────────────────────── -->
+    <div class="section">
+      <p class="section-title">7. Account Access Authorization</p>
+      <div class="section-body">
+        <p>Client authorizes Provider to temporarily access systems required to provide IT services, including:</p>
+        <ul>
+          <li>Email</li>
+          <li>Cloud platforms</li>
+          <li>Telecommunication or VoIP portals</li>
+          <li>Device administration</li>
+          <li>CRM / ERP / EMR / PMS or business software</li>
+          <li>Hosting dashboards</li>
+          <li>Authentication portals</li>
+        </ul>
+        <p style="margin-top:8px;">Client certifies they are legally authorized to grant access.</p>
+        <p style="margin-top:8px;">Revoking access does not cancel payment owed for time already spent.</p>
+      </div>
+    </div>
+
+    <!-- ── Section 8 ─────────────────────────────────────────────────── -->
+    <div class="section">
+      <p class="section-title">8. Confidentiality, PII, and Regulated Industry Context</p>
+      <div class="section-body">
+        <p>Provider will treat all business and client information as confidential, including:</p>
+        <ul>
+          <li>Personally Identifiable Information (PII)</li>
+          <li>Protected Health Information (PHI)</li>
+          <li>Legal documents</li>
+          <li>Financial or insurance data</li>
+          <li>Customer, patient, or client lists</li>
+          <li>Internal company records</li>
+        </ul>
+        <p>Provider will:</p>
+        <ul>
+          <li>Access only what is necessary to complete service</li>
+          <li>Not sell or disclose data</li>
+          <li>Not retain sensitive information beyond service completion</li>
+        </ul>
+        <div class="notice-box">
+          <strong>HIPAA / Medical Industry Notice</strong><br />
+          Provider is not a HIPAA Business Associate unless a separate Business Associate Agreement (BAA) is signed. Without a BAA: Provider provides IT services only, not PHI management or storage.
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Section 9 ─────────────────────────────────────────────────── -->
+    <div class="section">
+      <p class="section-title">9. Social Security Numbers</p>
+      <div class="section-body">
+        <p>Provider does not request, input, or store:</p>
+        <ul>
+          <li>Social Security Numbers</li>
+          <li>Full taxpayer identification numbers</li>
+        </ul>
+        <p style="margin-top:8px;">If a platform requires SSN, Client must enter it personally.</p>
+      </div>
+    </div>
+
+    <!-- ── Section 10 — REQUIRED CHECKBOX ───────────────────────────── -->
+    <div class="section">
+      <p class="section-title">10. No Guarantee of Results <span style="color:#ef4444">*</span></p>
+      <div class="section-body">
+        <p>Client understands that IT outcomes may be affected by factors outside Provider's control, including:</p>
+        <ul>
+          <li>Vendor or platform outages</li>
+          <li>Hardware defects</li>
+          <li>Legacy systems</li>
+          <li>ISP or network issues</li>
+          <li>Data corruption</li>
+          <li>Account restrictions</li>
+          <li>Malware or cyberattacks</li>
+          <li>Policy changes</li>
+          <li>User error</li>
+        </ul>
+        <p>Provider uses commercially reasonable effort, but does not guarantee:</p>
+        <ul>
+          <li>Specific outcomes</li>
+          <li>Recovery of data</li>
+          <li>System uptime</li>
+          <li>Permanent fixes</li>
+          <li>Ability to reverse prior damage</li>
+        </ul>
+      </div>
+
+      <label class="agree-box" for="agree_no_guarantee">
+        <input type="checkbox" id="agree_no_guarantee" name="agree_no_guarantee" />
+        <span class="agree-box-text">
+          <strong>I understand and acknowledge</strong> — Provider makes no guarantees of specific outcomes, data recovery, or system uptime, and outcomes may be affected by factors outside Provider's control. <strong style="color:#ef4444">(Required)</strong>
+        </span>
+      </label>
+    </div>
+
+    <!-- ── Section 11 ─────────────────────────────────────────────────── -->
+    <div class="section">
+      <p class="section-title">11. Limitation of Liability</p>
+      <div class="section-body">
+        <p>Provider is not liable for:</p>
+        <ul>
+          <li>Lost revenue</li>
+          <li>Lost customers</li>
+          <li>Lost business opportunities</li>
+          <li>Productivity loss</li>
+          <li>Data loss or corruption</li>
+          <li>Malware or ransomware</li>
+          <li>Consequential or indirect damages</li>
+        </ul>
+        <p style="margin-top:8px;">Maximum liability is limited to the amount paid under this Agreement.</p>
+      </div>
+    </div>
+
+    <!-- ── Section 12 ─────────────────────────────────────────────────── -->
+    <div class="section">
+      <p class="section-title">12. Service Termination</p>
+      <div class="section-body">
+        <p>Provider may refuse or terminate service if:</p>
+        <ul>
+          <li>Client behaves abusively or threatening</li>
+          <li>Client refuses to pay</li>
+          <li>Required access is blocked</li>
+          <li>Tasks are unsafe, unethical, or unlawful</li>
+          <li>Client misrepresents information</li>
+        </ul>
+        <p style="margin-top:8px;">Termination does not cancel amounts owed.</p>
+      </div>
+    </div>
+
+    <!-- ── Section 13 ─────────────────────────────────────────────────── -->
+    <div class="section">
+      <p class="section-title">13. Access Removal &amp; Data Handling</p>
+      <div class="section-body">
+        <p>Upon service completion, Provider will:</p>
+        <ul>
+          <li>Remove temporary access</li>
+          <li>Delete stored credentials</li>
+          <li>Revoke delegated permissions</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ── Section 14 — REQUIRED CHECKBOX ───────────────────────────── -->
+    <div class="section">
+      <p class="section-title">14. Payment <span style="color:#ef4444">*</span></p>
+      <div class="section-body">
+        <p>I agree to provide a valid payment method (credit/debit card or ACH) over the phone before service begins. ACH payments have no additional fee, while credit/debit card payments may include a processing fee charged by the provider.</p>
+        <p style="margin-top:8px;">Same-day services may be provided. For projects, multi-day work, or ongoing implementations, a deposit is required and SimplTech may pause or refuse service until the deposit is received.</p>
+      </div>
+
+      <label class="agree-box" for="agree_payment">
+        <input type="checkbox" id="agree_payment" name="agree_payment" />
+        <span class="agree-box-text">
+          <strong>I agree</strong> — I will provide a valid payment method before service begins and understand that deposits may be required for projects and multi-day work. <strong style="color:#ef4444">(Required)</strong>
+        </span>
+      </label>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- ── Signature ──────────────────────────────────────────────────── -->
+    <div style="margin-bottom: 28px;">
+      <p class="sig-label">Signature <span class="req">*</span></p>
+      <div class="sig-wrapper" id="sigWrapper">
+        <canvas id="sigCanvas"></canvas>
+        <div class="sig-hint" id="sigHint">Sign here with mouse or finger</div>
+      </div>
+      <div class="sig-toolbar">
+        <button type="button" class="clear-btn" id="clearBtn">Clear</button>
+      </div>
+    </div>
+
+    <!-- ── Error + Submit ─────────────────────────────────────────────── -->
+    <div class="error-msg" id="errorMsg"></div>
+
+    <button type="button" class="submit-btn" id="submitBtn">
+      Submit Agreement →
+    </button>
+
+    <p style="margin-top:14px; font-size:0.78rem; color:#9ca3af; text-align:center;">
+      After submitting, you will be redirected to Splashtop. Please follow the prompts to allow remote access.
+    </p>
+
+  </div><!-- /#formBody -->
+
+  <!-- ── Success state ───────────────────────────────────────────────── -->
+  <div class="redirect-msg" id="redirectMsg">
+    <h2>Agreement Submitted</h2>
+    <p>Redirecting you to Splashtop for remote access&hellip;</p>
+  </div>
+</div>
+
+<script>
+  // ── Pre-fill today's date ─────────────────────────────────────────────
+  (function () {
+    const d = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    document.getElementById('today_date').value =
+      `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  })();
+
+  // ── Signature canvas ──────────────────────────────────────────────────
+  (function () {
+    const canvas  = document.getElementById('sigCanvas');
+    const hint    = document.getElementById('sigHint');
+    const clearBtn = document.getElementById('clearBtn');
+    let ctx, drawing = false, hasMark = false;
+
+    function initCanvas() {
+      const wrapper = canvas.parentElement;
+      canvas.width  = wrapper.clientWidth;
+      canvas.height = 160;
+      ctx = canvas.getContext('2d');
+      ctx.strokeStyle = '#111827';
+      ctx.lineWidth   = 2.2;
+      ctx.lineCap     = 'round';
+      ctx.lineJoin    = 'round';
+    }
+
+    function pos(e) {
+      const r = canvas.getBoundingClientRect();
+      const scaleX = canvas.width  / r.width;
+      const scaleY = canvas.height / r.height;
+      const src = e.touches ? e.touches[0] : e;
+      return {
+        x: (src.clientX - r.left) * scaleX,
+        y: (src.clientY - r.top)  * scaleY,
+      };
+    }
+
+    function start(e) {
+      e.preventDefault();
+      drawing = true;
+      ctx.beginPath();
+      const p = pos(e);
+      ctx.moveTo(p.x, p.y);
+      if (!hasMark) { hint.style.display = 'none'; hasMark = true; }
+    }
+
+    function move(e) {
+      if (!drawing) return;
+      e.preventDefault();
+      const p = pos(e);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+    }
+
+    function stop(e) { if (drawing) { e.preventDefault(); drawing = false; } }
+
+    canvas.addEventListener('mousedown',  start);
+    canvas.addEventListener('mousemove',  move);
+    canvas.addEventListener('mouseup',    stop);
+    canvas.addEventListener('mouseleave', stop);
+    canvas.addEventListener('touchstart', start, { passive: false });
+    canvas.addEventListener('touchmove',  move,  { passive: false });
+    canvas.addEventListener('touchend',   stop,  { passive: false });
+
+    clearBtn.addEventListener('click', () => {
+      initCanvas();
+      hasMark = false;
+      hint.style.display = '';
+    });
+
+    window.getSignatureDataURL = () => hasMark ? canvas.toDataURL('image/png') : null;
+
+    // Re-scale on resize (debounced)
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => { initCanvas(); hasMark = false; hint.style.display = ''; }, 200);
+    });
+
+    initCanvas();
+  })();
+
+  // ── Form submission ───────────────────────────────────────────────────
+  document.getElementById('submitBtn').addEventListener('click', async function () {
+    const errorMsg = document.getElementById('errorMsg');
+    errorMsg.style.display = 'none';
+
+    const firstName   = document.getElementById('first_name').value.trim();
+    const lastName    = document.getElementById('last_name').value.trim();
+    const phone       = document.getElementById('phone').value.trim();
+    const email       = document.getElementById('email').value.trim();
+    const todayDate   = document.getElementById('today_date').value;
+    const agreeCollections  = document.getElementById('agree_collections').checked;
+    const agreeNoGuarantee  = document.getElementById('agree_no_guarantee').checked;
+    const agreePayment      = document.getElementById('agree_payment').checked;
+    const sigData = window.getSignatureDataURL();
+
+    // Client-side validation
+    if (!firstName || !phone || !email || !todayDate) {
+      show('Please fill in all required fields: First Name, Phone, Email, and Today\'s Date.');
+      return;
+    }
+
+    if (!agreeNoGuarantee) {
+      show('You must acknowledge Section 10 — No Guarantee of Results (required).');
+      document.getElementById('agree_no_guarantee').closest('.agree-box').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    if (!agreePayment) {
+      show('You must agree to Section 14 — Payment (required).');
+      document.getElementById('agree_payment').closest('.agree-box').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    if (!sigData) {
+      show('A drawn signature is required. Please sign in the box above.');
+      document.getElementById('sigWrapper').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    const btn = this;
+    btn.disabled    = true;
+    btn.textContent = 'Submitting…';
+
+    try {
+      const resp = await fetch('/api/agreement', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          first_name:         firstName,
+          last_name:          lastName,
+          phone,
+          email,
+          today_date:         todayDate,
+          agree_collections:  agreeCollections,
+          agree_no_guarantee: agreeNoGuarantee,
+          agree_payment:      agreePayment,
+          signature_data:     sigData,
+        }),
+      });
+
+      const data = await resp.json();
+
+      if (!data.ok) {
+        throw new Error(data.error || 'Submission failed. Please try again.');
+      }
+
+      // Success — show redirect message and go to Splashtop
+      document.getElementById('formBody').style.display    = 'none';
+      document.getElementById('redirectMsg').style.display = 'block';
+
+      setTimeout(() => {
+        window.location.href = 'https://sos.splashtop.com';
+      }, 1800);
+
+    } catch (err) {
+      show(err.message || 'Something went wrong. Please try again.');
+      btn.disabled    = false;
+      btn.textContent = 'Submit Agreement →';
+    }
+
+    function show(msg) {
+      errorMsg.textContent    = msg;
+      errorMsg.style.display  = 'block';
+      errorMsg.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  });
+</script>
+</body>
+</html>
