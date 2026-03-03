@@ -51,6 +51,14 @@ async function handleClientInvoice(req, res) {
     });
   }
 
+  // Fire-and-forget: push contact to GHL — never blocks or fails the payment.
+  upsertContact({
+    firstName,
+    lastName,
+    email,
+    phone: req.body.phone ?? undefined,
+  }).catch(() => {}); // errors already logged inside upsertContact
+
   const amountCents   = amount   ? parseInt(amount, 10)   : config.payment.presetAmount;
   const currency_     = currency ?? config.payment.currency;
   const dueDays       = due_days ? parseInt(due_days, 10) : 30;
@@ -78,14 +86,6 @@ async function handleClientInvoice(req, res) {
       invoiceId: invoice?.id,
     });
   }
-
-  // Fire-and-forget: push contact to GHL — never blocks or fails the payment.
-  upsertContact({
-    firstName,
-    lastName,
-    email,
-    phone: req.body.phone ?? undefined,
-  }).catch(() => {}); // errors already logged inside upsertContact
 
   return res.status(201).json({
     ok: true,
