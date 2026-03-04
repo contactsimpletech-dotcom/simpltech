@@ -39,18 +39,17 @@ async function getAPToken() {
   // AP dashboard provides the API key as a base64-encoded UUID.
   // Decode it to get the actual client_id the OAuth server expects.
   const clientId     = Buffer.from(rawKey, 'base64').toString('utf8');
-  // AP uses the client_id as the secret when none is issued separately.
-  const clientSecret = config.ap.clientSecret || clientId;
+  // Use AP_CLIENT_SECRET if set; otherwise send empty secret (uuid:).
+  // Do NOT fall back to clientId — inventing a secret causes 403.
+  const clientSecret = config.ap.clientSecret || '';
 
   const credential = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
 
-  // Send credentials both in the Authorization header (Basic) and in the
-  // request body (RFC 6749 §2.3.1) — AP requires both.
-  const body = new URLSearchParams({
-    grant_type:    'client_credentials',
-    client_id:     clientId,
-    client_secret: clientSecret,
-  }).toString();
+  // Send grant_type + client_id in body. Omit client_secret when empty
+  // (some servers reject a blank client_secret field).
+  const bodyParams = new URLSearchParams({ grant_type: 'client_credentials', client_id: clientId });
+  if (clientSecret) bodyParams.set('client_secret', clientSecret);
+  const body = bodyParams.toString();
 
   let response;
   try {
