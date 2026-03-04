@@ -31,17 +31,14 @@ const config = {
   },
 
   // ── Alternative Payments ──────────────────────────────────────────────────────
+  // Always use production endpoints — AP_BASE_URL is intentionally ignored so a
+  // stale demo URL in the environment cannot override production credentials.
   ap: {
-    apiKey: process.env.AP_API_KEY,                    // client_id for Basic Auth
-    clientSecret: process.env.AP_CLIENT_SECRET || '',  // client_secret (may be empty)
-    apiBaseUrl:
-      process.env.AP_BASE_URL ||
-      'https://public-api.alternativepayments.io',
-    tokenUrl:
-      process.env.AP_TOKEN_URL ||
-      `${process.env.AP_BASE_URL || 'https://public-api.alternativepayments.io'}/oauth/token`,
-    environment:
-      process.env.AP_ENVIRONMENT || 'production',      // 'production' | 'staging'
+    apiKey:       process.env.AP_API_KEY,                    // client_id for Basic Auth
+    clientSecret: process.env.AP_CLIENT_SECRET || '',        // client_secret (may be empty)
+    apiBaseUrl:   'https://public-api.alternativepayments.io',
+    tokenUrl:     process.env.AP_TOKEN_URL ||
+                  'https://public-api.alternativepayments.io/oauth/token',
   },
 
   // ── QuickBooks Online ──────────────────────────────────────────────────────────
