@@ -66,6 +66,15 @@ async function getAPToken() {
     );
   } catch (err) {
     const detail = err.response?.data ?? err.message;
+    console.error('[apAuth] token exchange failed');
+    console.error('[apAuth] token URL:', config.ap.tokenUrl);
+    console.error('[apAuth] client_id (decoded):', clientId);
+    if (err.response) {
+      console.error('[apAuth] upstream status:', err.response.status);
+      console.error('[apAuth] upstream body:', JSON.stringify(err.response.data));
+    } else {
+      console.error('[apAuth] network/other error:', err.message);
+    }
     throw new Error(
       `Alternative Payments token exchange failed: ${JSON.stringify(detail)}`,
     );

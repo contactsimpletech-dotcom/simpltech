@@ -29,6 +29,9 @@ const router = Router();
  *   signature_data      — base64 PNG data URL, required
  */
 router.post('/', async (req, res) => {
+  console.log('[agreement] Content-Type:', req.headers['content-type']);
+  console.log('[agreement] body keys:', Object.keys(req.body || {}));
+
   const {
     first_name,
     last_name,
@@ -108,6 +111,11 @@ router.post('/', async (req, res) => {
       ...(contact?.id && { external_id: contact.id }),
     });
   } catch (err) {
+    console.error('[agreement] AP createCustomer error:', err.message);
+    if (err.response) {
+      console.error('[agreement] AP status:', err.response.status);
+      console.error('[agreement] AP body:', JSON.stringify(err.response.data));
+    }
     return res.status(502).json({ ok: false, error: `Payment setup failed: ${err.message}` });
   }
 
