@@ -34,12 +34,12 @@ const config = {
   ap: {
     apiKey: process.env.AP_API_KEY,                    // client_id for Basic Auth
     clientSecret: process.env.AP_CLIENT_SECRET || '',  // client_secret (may be empty)
-    tokenUrl:
-      process.env.AP_TOKEN_URL ||
-      'https://public-api.alternativepayments.io/oauth/token',
     apiBaseUrl:
       process.env.AP_BASE_URL ||
       'https://public-api.alternativepayments.io',
+    tokenUrl:
+      process.env.AP_TOKEN_URL ||
+      `${process.env.AP_BASE_URL || 'https://public-api.alternativepayments.io'}/oauth/token`,
     environment:
       process.env.AP_ENVIRONMENT || 'production',      // 'production' | 'staging'
   },
