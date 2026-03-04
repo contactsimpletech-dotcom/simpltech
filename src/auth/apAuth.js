@@ -17,7 +17,7 @@ const tokenCache = {
  * Per AP docs:
  *   Authorization: Basic base64(clientId:clientSecret)
  *   Content-Type:  application/x-www-form-urlencoded
- *   Body:          grant_type=client_credentials   ← only this, nothing else
+ *   Body:          grant_type, client_id, client_secret (RFC 6749 §2.3.1)
  *
  * @returns {Promise<string>} A valid bearer access token.
  */
@@ -39,15 +39,24 @@ async function getAPToken() {
   // AP dashboard provides the API key as a base64-encoded UUID.
   // Decode it to get the actual client_id the OAuth server expects.
   const clientId     = Buffer.from(rawKey, 'base64').toString('utf8');
-  const clientSecret = config.ap.clientSecret || '';
+  // AP uses the client_id as the secret when none is issued separately.
+  const clientSecret = config.ap.clientSecret || clientId;
 
   const credential = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+
+  // Send credentials both in the Authorization header (Basic) and in the
+  // request body (RFC 6749 §2.3.1) — AP requires both.
+  const body = new URLSearchParams({
+    grant_type:    'client_credentials',
+    client_id:     clientId,
+    client_secret: clientSecret,
+  }).toString();
 
   let response;
   try {
     response = await axios.post(
       config.ap.tokenUrl,
-      'grant_type=client_credentials',               // body: only this field
+      body,
       {
         headers: {
           Authorization: `Basic ${credential}`,
