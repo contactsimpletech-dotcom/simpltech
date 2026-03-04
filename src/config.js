@@ -55,6 +55,23 @@ const config = {
     redirectBase:  process.env.APP_URL || 'https://simpltech-payment.onrender.com',
   },
 
+  // ── RingCentral ───────────────────────────────────────────────────────────────
+  // Server-to-server (JWT) auth: create a JWT credential in the RingCentral
+  // Developer Console under your app → Credentials → Create JWT.
+  //   RC_CLIENT_ID     — App client ID
+  //   RC_CLIENT_SECRET — App client secret
+  //   RC_JWT_TOKEN     — JWT assertion string
+  //   RC_FROM_NUMBER   — SMS sender number (E.164, e.g. +15551234567)
+  ringcentral: {
+    clientId:     process.env.RC_CLIENT_ID,
+    clientSecret: process.env.RC_CLIENT_SECRET,
+    jwtToken:     process.env.RC_JWT_TOKEN,
+    serverUrl:    process.env.RC_SERVER_URL    || 'https://platform.ringcentral.com',
+    accountId:    process.env.RC_ACCOUNT_ID   || '~',
+    extensionId:  process.env.RC_EXTENSION_ID || '~',
+    fromNumber:   process.env.RC_FROM_NUMBER,
+  },
+
   server: {
     port: parseInt(process.env.PORT || '3000', 10),
   },
@@ -82,6 +99,12 @@ function qboEnabled() {
   return !!(q.clientId && q.clientSecret && q.realmId && q.refreshToken);
 }
 
+/** @returns {boolean} */
+function ringcentralEnabled() {
+  const rc = config.ringcentral;
+  return !!(rc.clientId && rc.clientSecret && rc.jwtToken);
+}
+
 function validateConfig() {
   // QBO vars are set up post-deploy via /api/qbo/connect — warn but don't exit.
   const q = config.qbo;
@@ -90,6 +113,17 @@ function validateConfig() {
   } else if (!q.realmId || !q.refreshToken) {
     console.warn('[config] QBO_REALM_ID / QBO_REFRESH_TOKEN not set — visit /api/qbo/connect to authorise.');
   }
+
+  // RingCentral is optional — warn if partially configured.
+  const rc = config.ringcentral;
+  if (rc.clientId || rc.clientSecret || rc.jwtToken) {
+    if (!rc.clientId || !rc.clientSecret || !rc.jwtToken) {
+      console.warn('[config] RC_CLIENT_ID / RC_CLIENT_SECRET / RC_JWT_TOKEN must all be set to enable RingCentral.');
+    }
+    if (!rc.fromNumber) {
+      console.warn('[config] RC_FROM_NUMBER not set — SMS will use the account default number.');
+    }
+  }
 }
 
-module.exports = { config, ghlAuthMode, qboEnabled, validateConfig };
+module.exports = { config, ghlAuthMode, qboEnabled, ringcentralEnabled, validateConfig };
