@@ -28,14 +28,18 @@ async function getAPToken() {
     return tokenCache.accessToken;
   }
 
-  const clientId     = config.ap.apiKey;
-  const clientSecret = config.ap.clientSecret || '';
+  const rawKey = config.ap.apiKey;
 
-  if (!clientId) {
+  if (!rawKey) {
     throw new Error(
       'AP_API_KEY is not set. Add it in Render → Environment variables.',
     );
   }
+
+  // AP dashboard provides the API key as a base64-encoded UUID.
+  // Decode it to get the actual client_id the OAuth server expects.
+  const clientId     = Buffer.from(rawKey, 'base64').toString('utf8');
+  const clientSecret = config.ap.clientSecret || '';
 
   const credential = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
 
