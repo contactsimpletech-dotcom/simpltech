@@ -1,4 +1,5 @@
 const axios = require('axios');
+const FormData = require('form-data');
 const config = require('../config');
 
 function ghlClient() {
@@ -70,6 +71,40 @@ async function createContact(phone, firstName, lastName) {
 }
 
 /**
+ * Upload an audio buffer to the GHL media library.
+ * Returns the CDN URL of the uploaded file, or null on failure.
+ */
+async function uploadAudio(buffer, contentType, id) {
+  const ext = contentType.includes('wav') ? 'wav' : 'mp3';
+  const filename = `recording-${id}.${ext}`;
+
+  const form = new FormData();
+  form.append('file', buffer, { filename, contentType });
+  form.append('locationId', config.ghl.locationId);
+
+  try {
+    const res = await axios.post(
+      `${config.ghl.baseUrl}/medias/upload-file`,
+      form,
+      {
+        headers: {
+          Authorization: `Bearer ${config.ghl.apiKey}`,
+          Version: '2021-07-28',
+          ...form.getHeaders(),
+        },
+      }
+    );
+
+    const url = res.data?.url || res.data?.data?.url || null;
+    if (url) console.log(`[ghl] Audio uploaded: ${url}`);
+    return url;
+  } catch (err) {
+    console.error('[ghl] Audio upload failed:', err.response?.data || err.message);
+    return null;
+  }
+}
+
+/**
  * Add a note to a GHL contact.
  */
 async function addNote(contactId, body) {
@@ -81,4 +116,4 @@ async function addNote(contactId, body) {
   return note;
 }
 
-module.exports = { findContactByPhone, createContact, addNote };
+module.exports = { findContactByPhone, createContact, addNote, uploadAudio };

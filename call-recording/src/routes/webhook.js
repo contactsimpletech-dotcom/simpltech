@@ -1,7 +1,7 @@
 const express = require('express');
 const { downloadRecording } = require('../services/ringcentral');
 const { transcribe, extractCallerName } = require('../services/transcription');
-const { findContactByPhone, createContact, addNote } = require('../services/ghl');
+const { findContactByPhone, createContact, addNote, uploadAudio } = require('../services/ghl');
 
 const router = express.Router();
 
@@ -107,8 +107,11 @@ async function processRecording({
   const { buffer, contentType } = await downloadRecording(recordingId);
   console.log(`[pipeline] Downloaded ${Math.round(buffer.length / 1024)} KB (${contentType})`);
 
-  // 2. Transcribe with Whisper
-  const transcript = await transcribe(buffer, contentType);
+  // 2. Transcribe and upload audio in parallel
+  const [transcript, audioUrl] = await Promise.all([
+    transcribe(buffer, contentType),
+    uploadAudio(buffer, contentType, recordingId),
+  ]);
 
   // 3. Determine which phone number identifies the outside caller
   //    Inbound → the caller is the "from" party
@@ -149,6 +152,7 @@ async function processRecording({
     `Duration: ${durationStr}`,
     `Session ID: ${sessionId}`,
     `Recording ID: ${recordingId}`,
+    audioUrl ? `\nAudio Recording: ${audioUrl}` : '',
     ``,
     `─── Transcript ───`,
     transcript || '(no speech detected)',
