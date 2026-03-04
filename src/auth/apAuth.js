@@ -64,16 +64,28 @@ async function getAPToken() {
       },
     );
   } catch (err) {
+    const status = err.response?.status;
     const detail = err.response?.data ?? err.message;
     console.error('[apAuth] token exchange failed');
     console.error('[apAuth] token URL:', config.ap.tokenUrl);
     console.error('[apAuth] client_id (decoded):', clientId);
     if (err.response) {
-      console.error('[apAuth] upstream status:', err.response.status);
+      console.error('[apAuth] upstream status:', status);
       console.error('[apAuth] upstream body:', JSON.stringify(err.response.data));
+      const denyReason = err.response.headers?.['x-deny-reason'];
+      if (denyReason) console.error('[apAuth] deny reason:', denyReason);
     } else {
       console.error('[apAuth] network/other error:', err.message);
     }
+
+    if (status === 403) {
+      throw new Error(
+        'Alternative Payments blocked the token request (403). ' +
+        'Your server\'s IP is likely not on their allowlist — ' +
+        'log into the AP dashboard to whitelist it, or contact AP support.',
+      );
+    }
+
     throw new Error(
       `Alternative Payments token exchange failed: ${JSON.stringify(detail)}`,
     );
