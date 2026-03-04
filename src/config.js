@@ -44,6 +44,17 @@ const config = {
       process.env.AP_ENVIRONMENT || 'production',      // 'production' | 'staging'
   },
 
+  // ── RingCentral ───────────────────────────────────────────────────────────────
+  ringCentral: {
+    clientId:    process.env.RC_CLIENT_ID,
+    clientSecret: process.env.RC_CLIENT_SECRET,
+    jwt:         process.env.RC_JWT,           // JWT private key from RC developer console
+    accountId:   process.env.RC_ACCOUNT_ID   || '~',
+    extensionId: process.env.RC_EXTENSION_ID || '~',
+    fromNumber:  process.env.RC_FROM_NUMBER,   // caller ID / SMS sender phone number
+    apiBaseUrl:  process.env.RC_API_BASE_URL  || 'https://platform.ringcentral.com',
+  },
+
   // ── QuickBooks Online ──────────────────────────────────────────────────────────
   qbo: {
     clientId:      process.env.QBO_CLIENT_ID,
@@ -83,6 +94,12 @@ function qboEnabled() {
 }
 
 function validateConfig() {
+  // RingCentral — optional; warn when not configured.
+  const rc = config.ringCentral;
+  if (!rc.clientId || !rc.clientSecret || !rc.jwt) {
+    console.warn('[config] RC_CLIENT_ID / RC_CLIENT_SECRET / RC_JWT not set — RingCentral integration disabled.');
+  }
+
   // QBO vars are set up post-deploy via /api/qbo/connect — warn but don't exit.
   const q = config.qbo;
   if (!q.clientId || !q.clientSecret) {
