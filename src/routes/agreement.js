@@ -150,6 +150,11 @@ router.post('/', async (req, res) => {
     return res.status(502).json({ ok: false, error: 'Alternative Payments did not return a payment URL.' });
   }
 
+  // AP sometimes returns the URL without a protocol — ensure it's absolute.
+  if (paymentUrl && !paymentUrl.startsWith('http')) {
+    paymentUrl = `https://${paymentUrl}`;
+  }
+
   return res.json({ ok: true, paymentUrl });
 });
 
