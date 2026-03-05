@@ -36,9 +36,8 @@ async function getAPToken() {
     );
   }
 
-  // AP dashboard provides the API key as a base64-encoded UUID.
-  // Decode it to get the actual client_id the OAuth server expects.
-  const clientId     = Buffer.from(rawKey, 'base64').toString('utf8');
+  // AP_API_KEY is the raw client_id UUID from the AP dashboard (no encoding needed).
+  const clientId     = rawKey.trim();
   // Use AP_CLIENT_SECRET if set; otherwise send empty secret (uuid:).
   // Do NOT fall back to clientId — inventing a secret causes 403.
   const clientSecret = config.ap.clientSecret || '';
