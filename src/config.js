@@ -60,6 +60,7 @@ const config = {
     presetAmount: parseInt(process.env.PRESET_AMOUNT || '7500', 10), // cents; default $75.00
     currency: process.env.PRESET_CURRENCY || 'USD',
     invoiceDescription: process.env.INVOICE_DESCRIPTION || 'Service fee',
+    redirectUrl: process.env.PAYMENT_REDIRECT_URL || 'https://sos.splashtop.com',
   },
 };
 

@@ -141,9 +141,10 @@ router.post('/', async (req, res) => {
     const dueDate = new Date();
     dueDate.setDate(dueDate.getDate() + 30);
     invoice = await createInvoice({
-      customer_id: customer.id,
-      due_date:    dueDate.toISOString().split('T')[0],
-      line_items:  [{
+      customer_id:  customer.id,
+      due_date:     dueDate.toISOString().split('T')[0],
+      redirect_url: config.payment.redirectUrl,
+      line_items:   [{
         description: config.payment.invoiceDescription,
         amount:      config.payment.presetAmount / 100,  // convert cents → dollars for AP
         quantity:    1,
