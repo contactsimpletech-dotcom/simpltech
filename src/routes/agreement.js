@@ -105,17 +105,25 @@ router.post('/', async (req, res) => {
   let customer;
   try {
     const fullName = [first_name, last_name].filter(Boolean).join(' ');
-    customer = await createCustomer({
-      name:  fullName,
-      email,
-      ...(contact?.id && { external_id: contact.id }),
-    });
+    try {
+      customer = await createCustomer({
+        name:  fullName,
+        email,
+        ...(contact?.id && { external_id: contact.id }),
+      });
+    } catch (firstErr) {
+      // AP rejects duplicate external_id — retry without it so returning
+      // customers can still receive a new invoice.
+      const isExtIdConflict = firstErr.message?.includes('external id is already used');
+      if (contact?.id && isExtIdConflict) {
+        console.warn('[agreement] external_id conflict, retrying without it');
+        customer = await createCustomer({ name: fullName, email });
+      } else {
+        throw firstErr;
+      }
+    }
   } catch (err) {
     console.error('[agreement] AP createCustomer error:', err.message);
-    if (err.response) {
-      console.error('[agreement] AP status:', err.response.status);
-      console.error('[agreement] AP body:', JSON.stringify(err.response.data));
-    }
     return res.status(502).json({ ok: false, error: `Payment setup failed: ${err.message}` });
   }
 
