@@ -80,9 +80,9 @@ async function getAPToken() {
 
     if (status === 403) {
       throw new Error(
-        'Alternative Payments blocked the token request (403). ' +
-        'Your server\'s IP is likely not on their allowlist — ' +
-        'log into the AP dashboard to whitelist it, or contact AP support.',
+        'Alternative Payments rejected the token request (403). ' +
+        'Check that AP_API_KEY matches the active Client ID in AP Dashboard → Team Preferences → API Keys, ' +
+        'and that AP_CLIENT_SECRET is the matching secret.',
       );
     }
 
