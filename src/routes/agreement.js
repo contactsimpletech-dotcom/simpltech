@@ -137,7 +137,7 @@ router.post('/', async (req, res) => {
       due_date:    dueDate.toISOString().split('T')[0],
       line_items:  [{
         description: config.payment.invoiceDescription,
-        amount:      config.payment.presetAmount,
+        amount:      config.payment.presetAmount / 100,  // convert cents → dollars for AP
         quantity:    1,
       }],
     });
