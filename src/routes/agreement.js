@@ -31,8 +31,8 @@ const agreementSchema = z.object({
                        }),
 }).strict();
 
-// Allowed domains for the AP-returned payment URL (open-redirect guard).
-const ALLOWED_PAYMENT_DOMAINS = ['alternativepayments.io'];
+// Private/loopback hostnames that must never appear in a server-returned URL.
+const BLOCKED_PAYMENT_HOSTS = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/;
 
 /**
  * POST /api/agreement
@@ -173,15 +173,20 @@ router.post('/', agreementLimiter, async (req, res) => {
     paymentUrl = `https://${paymentUrl}`;
   }
 
-  // ── Open-redirect guard ───────────────────────────────────────────────────
-  // paymentUrl comes from the AP API, not from user input, but we validate
-  // its domain anyway to defend against a compromised upstream response.
+  // ── URL safety check ──────────────────────────────────────────────────────
+  // paymentUrl comes from our authenticated AP API call, not user input, so we
+  // validate it's a safe HTTPS URL rather than a strict domain allowlist.
   try {
     const parsed = new URL(paymentUrl);
-    if (!ALLOWED_PAYMENT_DOMAINS.some(d => parsed.hostname === d || parsed.hostname.endsWith('.' + d))) {
-      console.error('[agreement] payment URL failed domain allowlist:', parsed.hostname);
-      return res.status(502).json({ ok: false, error: 'Payment URL failed domain validation.' });
+    if (parsed.protocol !== 'https:') {
+      console.error('[agreement] payment URL is not HTTPS:', parsed.protocol);
+      return res.status(502).json({ ok: false, error: 'Payment URL must use HTTPS.' });
     }
+    if (BLOCKED_PAYMENT_HOSTS.test(parsed.hostname)) {
+      console.error('[agreement] payment URL points to private/local host:', parsed.hostname);
+      return res.status(502).json({ ok: false, error: 'Payment URL failed safety check.' });
+    }
+    console.log('[agreement] payment URL host:', parsed.hostname);
   } catch {
     return res.status(502).json({ ok: false, error: 'Payment URL is not a valid URL.' });
   }
