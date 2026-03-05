@@ -2,7 +2,7 @@
 
 const { Router } = require('express');
 const { upsertContact, addContactNote }          = require('../services/ghlContacts');
-const { createCustomer, createInvoice,
+const { createCustomer, addCustomerUser, createInvoice,
         getInvoicePaymentLink }                   = require('../services/alternativePayments');
 const { config }                                  = require('../config');
 
@@ -13,7 +13,7 @@ const router = Router();
  *
  * 1. Validate required fields, checkboxes, and signature.
  * 2. Upsert contact in GHL + attach a note with agreement details.
- * 3. Create an AP customer + invoice.
+ * 3. Create an AP customer + invoice (due today).
  * 4. Fetch the hosted AP payment link.
  * 5. Return { ok: true, paymentUrl } — browser redirects physically to AP.
  *
@@ -29,6 +29,9 @@ const router = Router();
  *   signature_data      — base64 PNG data URL, required
  */
 router.post('/', async (req, res) => {
+  console.log('[agreement] Content-Type:', req.headers['content-type']);
+  console.log('[agreement] body keys:', Object.keys(req.body || {}));
+
   const {
     first_name,
     last_name,
@@ -102,26 +105,46 @@ router.post('/', async (req, res) => {
   let customer;
   try {
     const fullName = [first_name, last_name].filter(Boolean).join(' ');
-    customer = await createCustomer({
-      name:  fullName,
-      email,
-      ...(contact?.id && { external_id: contact.id }),
-    });
+    try {
+      customer = await createCustomer({
+        name:  fullName,
+        email,
+        ...(contact?.id && { external_id: contact.id }),
+      });
+    } catch (firstErr) {
+      // AP rejects duplicate external_id — retry without it so returning
+      // customers can still receive a new invoice.
+      const isExtIdConflict = firstErr.message?.includes('external id is already used');
+      if (contact?.id && isExtIdConflict) {
+        console.warn('[agreement] external_id conflict, retrying without it');
+        customer = await createCustomer({ name: fullName, email });
+      } else {
+        throw firstErr;
+      }
+    }
   } catch (err) {
+    console.error('[agreement] AP createCustomer error:', err.message);
     return res.status(502).json({ ok: false, error: `Payment setup failed: ${err.message}` });
   }
 
-  // ── 4. AP: create invoice ──────────────────────────────────────────────────
+  // ── 3b. AP: add user to customer so they can save card / log in ───────────
+  // Fire-and-forget — AP will email them an invitation to create their account.
+  addCustomerUser(customer.id, {
+    email,
+    first_name,
+    last_name: last_name || first_name,
+  }).catch((err) => console.warn('[agreement] addCustomerUser failed (non-fatal):', err.message));
+
+  // ── 4. AP: create invoice (due today) ─────────────────────────────────────
   let invoice;
   try {
-    const dueDate = new Date();
-    dueDate.setDate(dueDate.getDate() + 30);
+    const today = new Date().toISOString().split('T')[0];
     invoice = await createInvoice({
       customer_id: customer.id,
-      due_date:    dueDate.toISOString().split('T')[0],
+      due_date:    today,
       line_items:  [{
         description: config.payment.invoiceDescription,
-        amount:      config.payment.presetAmount,
+        amount:      config.payment.presetAmount / 100,
         quantity:    1,
       }],
     });
@@ -140,6 +163,11 @@ router.post('/', async (req, res) => {
 
   if (!paymentUrl) {
     return res.status(502).json({ ok: false, error: 'Alternative Payments did not return a payment URL.' });
+  }
+
+  // AP sometimes returns the URL without a protocol — ensure it's absolute.
+  if (!paymentUrl.startsWith('http')) {
+    paymentUrl = `https://${paymentUrl}`;
   }
 
   return res.json({ ok: true, paymentUrl });

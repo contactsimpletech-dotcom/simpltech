@@ -9,6 +9,13 @@ validateConfig();
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // handles HTML form POST submissions
+
+// ─── Request logger ────────────────────────────────────────────────────────────
+app.use((req, _res, next) => {
+  console.log('[req]', req.method, req.url, 'ct=', req.headers['content-type']);
+  next();
+});
+
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
@@ -24,6 +31,14 @@ app.get('/health', (_req, res) =>
 
 app.use((_req, res) => res.status(404).json({ ok: false, error: 'Not found' }));
 
+// ─── Global error handler ─────────────────────────────────────────────────────
+// eslint-disable-next-line no-unused-vars
+app.use((err, _req, res, _next) => {
+  console.error('[express error]', err?.message);
+  console.error(err?.stack);
+  res.status(500).json({ ok: false, error: err?.message });
+});
+
 // ─── Start ────────────────────────────────────────────────────────────────────
 const { port } = config.server;
 app.listen(port, () => {
@@ -33,4 +48,12 @@ app.listen(port, () => {
   console.log(`\nsimpltech Payment server → http://localhost:${port}`);
   console.log(`  Preset amount : ${fmt(config.payment.presetAmount, config.payment.currency)}`);
   console.log(`  QBO env       : ${config.qbo.environment}\n`);
+});
+
+process.on('unhandledRejection', (err) => {
+  console.error('[unhandledRejection]', err);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err);
 });

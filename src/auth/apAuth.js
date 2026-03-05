@@ -17,7 +17,7 @@ const tokenCache = {
  * Per AP docs:
  *   Authorization: Basic base64(clientId:clientSecret)
  *   Content-Type:  application/x-www-form-urlencoded
- *   Body:          grant_type=client_credentials   ← only this, nothing else
+ *   Body:          grant_type, client_id, client_secret (RFC 6749 §2.3.1)
  *
  * @returns {Promise<string>} A valid bearer access token.
  */
@@ -28,22 +28,33 @@ async function getAPToken() {
     return tokenCache.accessToken;
   }
 
-  const clientId     = config.ap.apiKey;
-  const clientSecret = config.ap.clientSecret || '';
+  const rawKey = config.ap.apiKey;
 
-  if (!clientId) {
+  if (!rawKey) {
     throw new Error(
       'AP_API_KEY is not set. Add it in Render → Environment variables.',
     );
   }
 
+  // AP_API_KEY is the raw client_id UUID from the AP dashboard (no encoding needed).
+  const clientId     = rawKey.trim();
+  // Use AP_CLIENT_SECRET if set; otherwise send empty secret (uuid:).
+  // Do NOT fall back to clientId — inventing a secret causes 403.
+  const clientSecret = config.ap.clientSecret || '';
+
   const credential = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+
+  // Send grant_type + client_id in body. Omit client_secret when empty
+  // (some servers reject a blank client_secret field).
+  const bodyParams = new URLSearchParams({ grant_type: 'client_credentials', client_id: clientId });
+  if (clientSecret) bodyParams.set('client_secret', clientSecret);
+  const body = bodyParams.toString();
 
   let response;
   try {
     response = await axios.post(
       config.ap.tokenUrl,
-      'grant_type=client_credentials',               // body: only this field
+      body,
       {
         headers: {
           Authorization: `Basic ${credential}`,
@@ -52,7 +63,28 @@ async function getAPToken() {
       },
     );
   } catch (err) {
+    const status = err.response?.status;
     const detail = err.response?.data ?? err.message;
+    console.error('[apAuth] token exchange failed');
+    console.error('[apAuth] token URL:', config.ap.tokenUrl);
+    console.error('[apAuth] client_id (decoded):', clientId);
+    if (err.response) {
+      console.error('[apAuth] upstream status:', status);
+      console.error('[apAuth] upstream body:', JSON.stringify(err.response.data));
+      const denyReason = err.response.headers?.['x-deny-reason'];
+      if (denyReason) console.error('[apAuth] deny reason:', denyReason);
+    } else {
+      console.error('[apAuth] network/other error:', err.message);
+    }
+
+    if (status === 403) {
+      throw new Error(
+        'Alternative Payments rejected the token request (403). ' +
+        'Check that AP_API_KEY matches the active Client ID in AP Dashboard → Team Preferences → API Keys, ' +
+        'and that AP_CLIENT_SECRET is the matching secret.',
+      );
+    }
+
     throw new Error(
       `Alternative Payments token exchange failed: ${JSON.stringify(detail)}`,
     );
