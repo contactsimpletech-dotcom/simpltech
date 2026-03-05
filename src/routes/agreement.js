@@ -1,36 +1,55 @@
 'use strict';
 
 const { Router } = require('express');
+const { z }      = require('zod');
 const { upsertContact, addContactNote }          = require('../services/ghlContacts');
 const { createCustomer, addCustomerUser, createInvoice,
         getInvoicePaymentLink }                   = require('../services/alternativePayments');
 const { config }                                  = require('../config');
+const { agreementLimiter }                        = require('../middleware/rateLimit');
 
 const router = Router();
+
+// ─── Validation schema ────────────────────────────────────────────────────────
+// .strict() rejects any extra keys not listed here (prevents parameter pollution).
+const agreementSchema = z.object({
+  first_name:         z.string().min(1).max(100).trim(),
+  last_name:          z.string().max(100).trim().optional(),
+  // Phone: digits, spaces, +, -, (), .  — 7-20 chars after trimming.
+  phone:              z.string().trim().min(7).max(20)
+                       .regex(/^[\d\s\+\-\(\)\.]+$/, 'Invalid phone format'),
+  email:              z.string().trim().email('Invalid email address').max(254)
+                       .transform(v => v.toLowerCase()),
+  today_date:         z.string().min(1).max(50),
+  agree_collections:  z.union([z.boolean(), z.string()]).optional(),
+  agree_no_guarantee: z.union([z.boolean(), z.string()]),
+  agree_payment:      z.union([z.boolean(), z.string()]),
+  // signature_data: base64 data URL. Min 100 chars (empty canvas), max 200 KB.
+  signature_data:     z.string().min(100).max(200_000)
+                       .refine(v => v.startsWith('data:image/'), {
+                         message: 'signature_data must be an image data URL',
+                       }),
+}).strict();
+
+// Allowed domains for the AP-returned payment URL (open-redirect guard).
+const ALLOWED_PAYMENT_DOMAINS = ['alternativepayments.io'];
 
 /**
  * POST /api/agreement
  *
- * 1. Validate required fields, checkboxes, and signature.
- * 2. Upsert contact in GHL + attach a note with agreement details.
- * 3. Create an AP customer + invoice (due today).
+ * 1. Validate + sanitise request body.
+ * 2. Upsert GHL contact + attach a note with agreement details.
+ * 3. Create AP customer + invoice (due today).
  * 4. Fetch the hosted AP payment link.
- * 5. Return { ok: true, paymentUrl } — browser redirects physically to AP.
- *
- * Body (JSON):
- *   first_name          — required
- *   last_name           — optional
- *   phone               — required
- *   email               — required
- *   today_date          — required
- *   agree_collections   — boolean (section 6)
- *   agree_no_guarantee  — boolean, required (section 10)
- *   agree_payment       — boolean, required (section 14)
- *   signature_data      — base64 PNG data URL, required
+ * 5. Return { ok: true, paymentUrl } — browser redirects to AP.
  */
-router.post('/', async (req, res) => {
-  console.log('[agreement] Content-Type:', req.headers['content-type']);
-  console.log('[agreement] body keys:', Object.keys(req.body || {}));
+router.post('/', agreementLimiter, async (req, res) => {
+  // ── Input validation ──────────────────────────────────────────────────────
+  const parsed = agreementSchema.safeParse(req.body);
+  if (!parsed.success) {
+    const first = parsed.error.issues[0];
+    return res.status(400).json({ ok: false, error: first.message });
+  }
 
   const {
     first_name,
@@ -42,15 +61,9 @@ router.post('/', async (req, res) => {
     agree_no_guarantee,
     agree_payment,
     signature_data,
-  } = req.body;
+  } = parsed.data;
 
-  if (!first_name || !phone || !email || !today_date) {
-    return res.status(400).json({
-      ok: false,
-      error: "First name, phone, email, and today's date are required.",
-    });
-  }
-
+  // ── Business-rule checks ──────────────────────────────────────────────────
   if (!agree_no_guarantee) {
     return res.status(400).json({
       ok: false,
@@ -65,14 +78,7 @@ router.post('/', async (req, res) => {
     });
   }
 
-  if (!signature_data || signature_data.length < 100) {
-    return res.status(400).json({
-      ok: false,
-      error: 'A drawn signature is required.',
-    });
-  }
-
-  // ── 1. GHL: upsert contact ─────────────────────────────────────────────────
+  // ── 1. GHL: upsert contact ────────────────────────────────────────────────
   const contact = await upsertContact({
     firstName: first_name,
     lastName:  last_name || undefined,
@@ -80,7 +86,7 @@ router.post('/', async (req, res) => {
     phone,
   }).catch(() => null);
 
-  // ── 2. GHL: attach agreement note ─────────────────────────────────────────
+  // ── 2. GHL: attach agreement note ────────────────────────────────────────
   if (contact?.id) {
     const noteLines = [
       'IT Support Authorization & Payment Agreement',
@@ -94,14 +100,14 @@ router.post('/', async (req, res) => {
       `Sec 10 – No Guarantee of Results     : Agreed`,
       `Sec 14 – Payment Agreement           : Agreed`,
       '',
-      `Digital Signature : Provided`,
+      `Digital Signature : Provided (${Math.round(signature_data.length * 0.75 / 1024)} KB)`,
       `Client IP         : ${req.ip}`,
       `Timestamp (UTC)   : ${new Date().toISOString()}`,
     ];
     addContactNote(contact.id, noteLines.join('\n')).catch(() => {});
   }
 
-  // ── 3. AP: create customer ─────────────────────────────────────────────────
+  // ── 3. AP: create customer ────────────────────────────────────────────────
   let customer;
   try {
     const fullName = [first_name, last_name].filter(Boolean).join(' ');
@@ -112,8 +118,6 @@ router.post('/', async (req, res) => {
         ...(contact?.id && { external_id: contact.id }),
       });
     } catch (firstErr) {
-      // AP rejects duplicate external_id — retry without it so returning
-      // customers can still receive a new invoice.
       const isExtIdConflict = firstErr.message?.includes('external id is already used');
       if (contact?.id && isExtIdConflict) {
         console.warn('[agreement] external_id conflict, retrying without it');
@@ -127,8 +131,7 @@ router.post('/', async (req, res) => {
     return res.status(502).json({ ok: false, error: `Payment setup failed: ${err.message}` });
   }
 
-  // ── 3b. AP: add user to customer so they can save card / log in ───────────
-  // Fire-and-forget — AP will email them an invitation to create their account.
+  // ── 3b. AP: add customer user (fire-and-forget) ───────────────────────────
   addCustomerUser(customer.id, {
     email,
     first_name,
@@ -152,7 +155,7 @@ router.post('/', async (req, res) => {
     return res.status(502).json({ ok: false, error: `Invoice creation failed: ${err.message}` });
   }
 
-  // ── 5. AP: get hosted payment link ─────────────────────────────────────────
+  // ── 5. AP: get hosted payment link ────────────────────────────────────────
   let paymentUrl;
   try {
     const linkData = await getInvoicePaymentLink(invoice.id);
@@ -165,9 +168,22 @@ router.post('/', async (req, res) => {
     return res.status(502).json({ ok: false, error: 'Alternative Payments did not return a payment URL.' });
   }
 
-  // AP sometimes returns the URL without a protocol — ensure it's absolute.
+  // Ensure absolute URL.
   if (!paymentUrl.startsWith('http')) {
     paymentUrl = `https://${paymentUrl}`;
+  }
+
+  // ── Open-redirect guard ───────────────────────────────────────────────────
+  // paymentUrl comes from the AP API, not from user input, but we validate
+  // its domain anyway to defend against a compromised upstream response.
+  try {
+    const parsed = new URL(paymentUrl);
+    if (!ALLOWED_PAYMENT_DOMAINS.some(d => parsed.hostname === d || parsed.hostname.endsWith('.' + d))) {
+      console.error('[agreement] payment URL failed domain allowlist:', parsed.hostname);
+      return res.status(502).json({ ok: false, error: 'Payment URL failed domain validation.' });
+    }
+  } catch {
+    return res.status(502).json({ ok: false, error: 'Payment URL is not a valid URL.' });
   }
 
   return res.json({ ok: true, paymentUrl });

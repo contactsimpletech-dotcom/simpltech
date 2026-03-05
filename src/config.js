@@ -81,6 +81,22 @@ function qboEnabled() {
 }
 
 function validateConfig() {
+  // AP_API_KEY is required — the payment flow is completely non-functional without it.
+  if (!config.ap.apiKey) {
+    throw new Error(
+      '[config] FATAL: AP_API_KEY is not set. ' +
+      'Add it in Render → Environment variables and redeploy.',
+    );
+  }
+
+  // GHL: warn if neither auth mode is configured.
+  if (!config.ghl.apiKey && (!config.ghl.clientId || !config.ghl.clientSecret)) {
+    console.warn(
+      '[config] GHL_API_KEY (or GHL_CLIENT_ID + GHL_CLIENT_SECRET) not set — ' +
+      'GHL contact sync will be skipped.',
+    );
+  }
+
   // QBO vars are set up post-deploy via /api/qbo/connect — warn but don't exit.
   const q = config.qbo;
   if (!q.clientId || !q.clientSecret) {

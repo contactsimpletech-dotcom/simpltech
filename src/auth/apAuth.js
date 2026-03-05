@@ -8,16 +8,16 @@ const { config } = require('../config');
  */
 const tokenCache = {
   accessToken: null,
-  expiresAt: 0,
+  expiresAt:   0,
 };
+
+// Concurrency lock: any caller that arrives while a token fetch is in-flight
+// waits on the same promise instead of firing a second credential exchange.
+let _inflightTokenFetch = null;
 
 /**
  * Exchange AP credentials for an OAuth bearer access token.
- *
- * Per AP docs:
- *   Authorization: Basic base64(clientId:clientSecret)
- *   Content-Type:  application/x-www-form-urlencoded
- *   Body:          grant_type, client_id, client_secret (RFC 6749 §2.3.1)
+ * Token is cached until 60 seconds before its stated expiry.
  *
  * @returns {Promise<string>} A valid bearer access token.
  */
@@ -28,6 +28,17 @@ async function getAPToken() {
     return tokenCache.accessToken;
   }
 
+  // Return the in-flight fetch if one is already running (prevents stampede).
+  if (_inflightTokenFetch) return _inflightTokenFetch;
+
+  _inflightTokenFetch = _fetchNewToken().finally(() => {
+    _inflightTokenFetch = null;
+  });
+
+  return _inflightTokenFetch;
+}
+
+async function _fetchNewToken() {
   const rawKey = config.ap.apiKey;
 
   if (!rawKey) {
@@ -36,41 +47,34 @@ async function getAPToken() {
     );
   }
 
-  // AP_API_KEY is the raw client_id UUID from the AP dashboard (no encoding needed).
   const clientId     = rawKey.trim();
-  // Use AP_CLIENT_SECRET if set; otherwise send empty secret (uuid:).
-  // Do NOT fall back to clientId — inventing a secret causes 403.
   const clientSecret = config.ap.clientSecret || '';
 
   const credential = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
 
-  // Send grant_type + client_id in body. Omit client_secret when empty
-  // (some servers reject a blank client_secret field).
   const bodyParams = new URLSearchParams({ grant_type: 'client_credentials', client_id: clientId });
   if (clientSecret) bodyParams.set('client_secret', clientSecret);
-  const body = bodyParams.toString();
 
   let response;
   try {
     response = await axios.post(
       config.ap.tokenUrl,
-      body,
+      bodyParams.toString(),
       {
         headers: {
           Authorization: `Basic ${credential}`,
           'Content-Type': 'application/x-www-form-urlencoded',
         },
+        timeout: 10_000, // 10-second upstream timeout
       },
     );
   } catch (err) {
     const status = err.response?.status;
-    const detail = err.response?.data ?? err.message;
+    // Log the failure without leaking the raw credential.
     console.error('[apAuth] token exchange failed');
     console.error('[apAuth] token URL:', config.ap.tokenUrl);
-    console.error('[apAuth] client_id (decoded):', clientId);
     if (err.response) {
       console.error('[apAuth] upstream status:', status);
-      console.error('[apAuth] upstream body:', JSON.stringify(err.response.data));
       const denyReason = err.response.headers?.['x-deny-reason'];
       if (denyReason) console.error('[apAuth] deny reason:', denyReason);
     } else {
@@ -80,13 +84,12 @@ async function getAPToken() {
     if (status === 403) {
       throw new Error(
         'Alternative Payments rejected the token request (403). ' +
-        'Check that AP_API_KEY matches the active Client ID in AP Dashboard → Team Preferences → API Keys, ' +
-        'and that AP_CLIENT_SECRET is the matching secret.',
+        'Check AP_API_KEY and AP_CLIENT_SECRET in Render → Environment variables.',
       );
     }
 
     throw new Error(
-      `Alternative Payments token exchange failed: ${JSON.stringify(detail)}`,
+      `Alternative Payments token exchange failed (HTTP ${status ?? 'N/A'}).`,
     );
   }
 
@@ -97,7 +100,7 @@ async function getAPToken() {
   }
 
   tokenCache.accessToken = access_token;
-  tokenCache.expiresAt   = now + ((expires_in ?? 3600) - 60) * 1000;
+  tokenCache.expiresAt   = Date.now() + ((expires_in ?? 3600) - 60) * 1000;
 
   return access_token;
 }
@@ -115,8 +118,9 @@ async function getAPClient() {
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
-      Accept: 'application/json',
+      Accept:         'application/json',
     },
+    timeout: 30_000, // 30-second upstream timeout
   });
 }
 

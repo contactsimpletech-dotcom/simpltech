@@ -2,21 +2,41 @@
 
 const path    = require('path');
 const express = require('express');
-const { config, validateConfig } = require('./config');
+const { config, validateConfig }           = require('./config');
+const { corsMiddleware, helmetMiddleware }  = require('./middleware/security');
+const { apiLimiter }                       = require('./middleware/rateLimit');
 
 validateConfig();
 
 const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: true })); // handles HTML form POST submissions
 
-// ─── Request logger ────────────────────────────────────────────────────────────
+// ─── Security headers (helmet) ────────────────────────────────────────────────
+app.use(helmetMiddleware);
+
+// ─── CORS ────────────────────────────────────────────────────────────────────
+app.use(corsMiddleware);
+
+// ─── Body parsing ────────────────────────────────────────────────────────────
+// 512 KB limit covers the signature_data base64 payload.
+// Requests that exceed this receive a 413 before any route logic runs.
+app.use(express.json({ limit: '512kb' }));
+app.use(express.urlencoded({ extended: true, limit: '512kb' }));
+
+// ─── Request logger (no PII) ──────────────────────────────────────────────────
+// Log method + path only — do NOT log Content-Type or body fields that may
+// contain email / phone / signature data.
 app.use((req, _res, next) => {
-  console.log('[req]', req.method, req.url, 'ct=', req.headers['content-type']);
+  console.log('[req]', req.method, req.path);
   next();
 });
 
+// ─── Static files ─────────────────────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, '..', 'public')));
+
+// ─── API rate limiting ────────────────────────────────────────────────────────
+// Applied to all /api/* routes. Tighter limiter on /api/agreement is mounted
+// inside routes/agreement.js.
+app.use('/api', apiLimiter);
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/keys',      require('./routes/keys'));
@@ -36,7 +56,8 @@ app.use((_req, res) => res.status(404).json({ ok: false, error: 'Not found' }));
 app.use((err, _req, res, _next) => {
   console.error('[express error]', err?.message);
   console.error(err?.stack);
-  res.status(500).json({ ok: false, error: err?.message });
+  // Never expose internal stack traces or raw error messages to clients.
+  res.status(500).json({ ok: false, error: 'Internal server error' });
 });
 
 // ─── Start ────────────────────────────────────────────────────────────────────
@@ -51,9 +72,9 @@ app.listen(port, () => {
 });
 
 process.on('unhandledRejection', (err) => {
-  console.error('[unhandledRejection]', err);
+  console.error('[unhandledRejection]', err?.message ?? err);
 });
 
 process.on('uncaughtException', (err) => {
-  console.error('[uncaughtException]', err);
+  console.error('[uncaughtException]', err?.message ?? err);
 });

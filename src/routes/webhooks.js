@@ -111,21 +111,32 @@ router.post('/retry', async (req, res) => {
   }
 });
 
+// ─── Idempotency store ────────────────────────────────────────────────────────
+// In-memory set of processed idempotency keys. Prevents double-processing
+// when AP retries a delivery. Capped at 10 000 entries; oldest evicted first.
+const _seenKeys = new Set();
+const _SEEN_MAX = 10_000;
+
+function _markSeen(key) {
+  if (_seenKeys.size >= _SEEN_MAX) {
+    // Evict the oldest entry (insertion order).
+    _seenKeys.delete(_seenKeys.values().next().value);
+  }
+  _seenKeys.add(key);
+}
+
 /**
  * POST /api/webhooks/receive
  *
- * Example inbound handler — mount this at your public HTTPS endpoint and
- * point AP subscriptions at it.  Set AP_WEBHOOK_SECRET in .env to enable
- * Bearer-token verification.
- *
- * This is an optional convenience route for testing; remove or replace
- * with your own business logic in production.
+ * Inbound webhook handler. Set AP_WEBHOOK_SECRET in .env to enable
+ * Bearer-token verification. Each event is deduplicated by idempotency_key.
  */
 router.post('/receive', (req, res) => {
+  // ── Bearer token verification ────────────────────────────────────────────
   const secret = process.env.AP_WEBHOOK_SECRET;
   if (secret) {
     const auth = req.headers.authorization ?? '';
-    if (!auth.startsWith('Bearer ') || auth.replace('Bearer ', '') !== secret) {
+    if (!auth.startsWith('Bearer ') || auth.slice('Bearer '.length) !== secret) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
   }
@@ -136,8 +147,15 @@ router.post('/receive', (req, res) => {
     return res.status(400).json({ error: 'Missing idempotency_key' });
   }
 
-  // Log the event (replace with your own handling / queue logic).
-  console.log(`[Webhook] ${timestamp} | ${topic} | entity=${entity_id}`, data);
+  // ── Replay protection ────────────────────────────────────────────────────
+  if (_seenKeys.has(idempotency_key)) {
+    console.log(`[Webhook] duplicate idempotency_key=${idempotency_key} — ignored`);
+    return res.json({ message: 'Webhook already processed' });
+  }
+  _markSeen(idempotency_key);
+
+  // Log the event — omit full data payload to avoid PII in logs.
+  console.log(`[Webhook] ${timestamp} | ${topic} | entity=${entity_id} | key=${idempotency_key}`);
 
   res.json({ message: 'Webhook received' });
 });
