@@ -2,8 +2,8 @@
 
 const { Router } = require('express');
 const { upsertContact, addContactNote }          = require('../services/ghlContacts');
-const { createCustomer, addCustomerUser,
-        createPaymentRequest }                    = require('../services/alternativePayments');
+const { createCustomer, addCustomerUser, createInvoice,
+        getInvoicePaymentLink }                   = require('../services/alternativePayments');
 const { config }                                  = require('../config');
 
 const router = Router();
@@ -13,8 +13,8 @@ const router = Router();
  *
  * 1. Validate required fields, checkboxes, and signature.
  * 2. Upsert contact in GHL + attach a note with agreement details.
- * 3. Create an AP customer.
- * 4. Create an AP payment request (supports redirect_url).
+ * 3. Create an AP customer + invoice (due today).
+ * 4. Fetch the hosted AP payment link.
  * 5. Return { ok: true, paymentUrl } — browser redirects physically to AP.
  *
  * Body (JSON):
@@ -135,18 +135,30 @@ router.post('/', async (req, res) => {
     last_name: last_name || first_name,
   }).catch((err) => console.warn('[agreement] addCustomerUser failed (non-fatal):', err.message));
 
-  // ── 4. AP: create payment request (supports redirect_url) ─────────────────
+  // ── 4. AP: create invoice (due today) ─────────────────────────────────────
+  let invoice;
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    invoice = await createInvoice({
+      customer_id: customer.id,
+      due_date:    today,
+      line_items:  [{
+        description: config.payment.invoiceDescription,
+        amount:      config.payment.presetAmount / 100,
+        quantity:    1,
+      }],
+    });
+  } catch (err) {
+    return res.status(502).json({ ok: false, error: `Invoice creation failed: ${err.message}` });
+  }
+
+  // ── 5. AP: get hosted payment link ─────────────────────────────────────────
   let paymentUrl;
   try {
-    const pr = await createPaymentRequest({
-      amount:       config.payment.presetAmount,
-      currency:     config.payment.currency,
-      redirect_url: config.payment.redirectUrl,
-      reference_id: customer.id,
-    });
-    paymentUrl = pr?.url ?? pr?.checkout_url ?? pr?.payment_url ?? null;
+    const linkData = await getInvoicePaymentLink(invoice.id);
+    paymentUrl = linkData?.url ?? linkData?.payment_link ?? linkData?.link ?? null;
   } catch (err) {
-    return res.status(502).json({ ok: false, error: `Payment request failed: ${err.message}` });
+    return res.status(502).json({ ok: false, error: `Could not retrieve payment link: ${err.message}` });
   }
 
   if (!paymentUrl) {
