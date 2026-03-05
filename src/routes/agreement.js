@@ -2,7 +2,7 @@
 
 const { Router } = require('express');
 const { upsertContact, addContactNote }          = require('../services/ghlContacts');
-const { createCustomer, createInvoice,
+const { createCustomer, addCustomerUser, createInvoice,
         getInvoicePaymentLink }                   = require('../services/alternativePayments');
 const { config }                                  = require('../config');
 
@@ -126,6 +126,14 @@ router.post('/', async (req, res) => {
     console.error('[agreement] AP createCustomer error:', err.message);
     return res.status(502).json({ ok: false, error: `Payment setup failed: ${err.message}` });
   }
+
+  // ── 3b. AP: add user to customer so they can save card / log in ───────────
+  // Fire-and-forget — AP will email them an invitation to create their account.
+  addCustomerUser(customer.id, {
+    email,
+    first_name,
+    last_name: last_name || first_name,
+  }).catch((err) => console.warn('[agreement] addCustomerUser failed (non-fatal):', err.message));
 
   // ── 4. AP: create invoice ──────────────────────────────────────────────────
   let invoice;
