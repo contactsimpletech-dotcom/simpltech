@@ -10,6 +10,11 @@ validateConfig();
 
 const app = express();
 
+// Trust the first proxy hop (Render's load balancer / Cloudflare).
+// Required so express-rate-limit reads the real client IP from X-Forwarded-For
+// instead of the proxy's IP, and so req.ip is accurate.
+app.set('trust proxy', 1);
+
 // ─── Security headers (helmet) ────────────────────────────────────────────────
 app.use(helmetMiddleware);
 

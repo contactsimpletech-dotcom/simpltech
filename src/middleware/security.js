@@ -8,6 +8,7 @@ const cors   = require('cors');
 // CORS headers at all. This allowlist covers cross-origin callers only.
 const ALLOWED_ORIGINS = [
   'https://simpltech-payment.onrender.com',
+  'https://sos-simpletech.com',
   ...(process.env.ALLOWED_ORIGIN ? [process.env.ALLOWED_ORIGIN] : []),
 ];
 
